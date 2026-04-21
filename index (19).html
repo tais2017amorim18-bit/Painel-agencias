@@ -1,0 +1,3585 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<title>Produção Diária — Agências</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f7; color: #1a1a2e; min-height: 100vh; }
+
+  .header { background: #1a3a6e; color: #fff; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  .header h1 { font-size: 15px; font-weight: 700; }
+  .header .sub { font-size: 11px; opacity: 0.8; }
+
+  /* Dashboard mini */
+  .dash { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .dash-card { background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 7px 13px; min-width: 100px; text-align: center; }
+  .dash-card .dc-label { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.75; margin-bottom: 2px; }
+  .dash-card .dc-val   { font-size: 14px; font-weight: 700; line-height: 1.2; }
+  .dash-card .dc-sub   { font-size: 9px; opacity: 0.7; margin-top: 1px; }
+
+  /* Quartil barras */
+  .q-bar-wrap { display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;max-width:60px; }
+  .q-bar { border-radius:4px 4px 0 0;width:100%;min-height:4px;display:flex;align-items:flex-start;justify-content:center;padding-top:4px;transition:height 0.5s; }
+  .q-bar span { font-size:12px;font-weight:700;color:#fff; }
+  .q-bar.q1 { background:#1a3a6e; }
+  .q-bar.q2 { background:#0d7a5f; }
+  .q-bar.q3 { background:#e67e22; }
+  .q-bar.q4 { background:#b92d2d; }
+  .q-bar-lbl { font-size:10px;font-weight:700;color:#555; }
+  .q-corte-table { width:100%;border-collapse:collapse;font-size:10px;background:#f5f7fb;border-radius:6px;overflow:hidden; }
+  .q-corte-table th { padding:4px 8px;text-align:center;font-weight:700; }
+  .q-corte-table td { padding:4px 8px;text-align:center;border-top:1px solid #e8eaf0; }
+
+  /* Cards de agência com relógio */
+  .ag-cards-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:8px; margin-bottom:12px; }
+  .ag-card { background:#fff; border:1px solid #e0e4ec; border-radius:10px; padding:10px 12px; position:relative; overflow:hidden; min-width:0; }
+  .ag-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:#e0e4ec; }
+  .ag-card.q1-ag::before { background:#1a3a6e; }
+  .ag-card.q2-ag::before { background:#0d7a5f; }
+  .ag-card.q3-ag::before { background:#e67e22; }
+  .ag-card.q4-ag::before { background:#b92d2d; }
+  .ag-card .ag-nome { font-size:11px; font-weight:700; color:#1a3a6e; margin-bottom:8px; }
+  .ag-clock-wrap { position:relative; width:60px; height:60px; margin:0 auto 6px; }
+  .ag-clock-wrap svg { width:60px; height:60px; transform:rotate(-90deg); }
+  .ag-clock-bg  { fill:none; stroke:#f0f2f7; stroke-width:5; }
+  .ag-clock-arc { fill:none; stroke-width:5; stroke-linecap:round; transition:stroke-dashoffset 0.6s; }
+  .ag-clock-text { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .ag-clock-pct  { font-size:12px; font-weight:700; color:#1a3a6e; }
+  .ag-clock-lbl  { font-size:8px; color:#888; }
+  .ag-vop-val  { font-size:12px; font-weight:700; color:#1a3a6e; text-align:center; }
+  .ag-meta-val { font-size:10px; color:#888; text-align:center; margin-bottom:4px; }
+  .ag-badge    { font-size:10px; font-weight:700; padding:2px 8px; border-radius:20px; text-align:center; display:inline-block; }
+  .ag-q1 { background:#e8edf7; color:#1a3a6e; }
+  .ag-q2 { background:#e0f5ee; color:#0d7a5f; }
+  .ag-q3 { background:#fef3e2; color:#e67e22; }
+  .ag-q4 { background:#fde8e8; color:#b92d2d; }
+  .ag-pendente { opacity:0.45; }
+
+  /* Relógio VOP */
+  .vop-clock-wrap { position: relative; width: 70px; height: 70px; flex-shrink: 0; }
+  .vop-clock-wrap svg { width: 70px; height: 70px; transform: rotate(-90deg); }
+  .vop-clock-bg   { fill: none; stroke: rgba(255,255,255,0.15); stroke-width: 5; }
+  .vop-clock-arc  { fill: none; stroke: #4ade80; stroke-width: 5; stroke-linecap: round; transition: stroke-dashoffset 0.8s ease; }
+  .vop-clock-text { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .vop-clock-pct  { font-size: 13px; font-weight: 700; color: #fff; line-height: 1; }
+  .vop-clock-lbl  { font-size: 8px; color: rgba(255,255,255,0.7); font-weight: 600; text-transform: uppercase; margin-top: 1px; }
+
+  .tabs { display: flex; background: #fff; border-bottom: 2px solid #e0e4ec; padding: 0 20px; }
+  .tab { padding: 11px 18px; font-size: 12px; font-weight: 600; color: #888; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.2s; white-space: nowrap; }
+  .tab.active { color: #1a3a6e; border-bottom-color: #1a3a6e; }
+  .tab:hover:not(.active) { color: #444; }
+
+  .page { display: none; }
+  .page.active { display: block; }
+  .container { max-width: 1200px; margin: 14px auto; padding: 0 14px; }
+
+  .card { background: #fff; border-radius: 10px; border: 1px solid #e0e4ec; padding: 14px 18px; margin-bottom: 12px; }
+  .card-title { font-size: 11px; font-weight: 700; color: #1a3a6e; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .pill { border-radius: 4px; padding: 2px 8px; font-size: 10px; font-weight: 600; }
+  .pill-blue  { background: #1a3a6e; color: #fff; }
+  .pill-green { background: #0d7a5f; color: #fff; }
+
+  .field-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  label { font-size: 12px; color: #555; font-weight: 500; }
+  select, input[type=date] { padding: 7px 10px; border: 1px solid #d0d5e0; border-radius: 7px; font-size: 12px; color: #1a1a2e; background: #f9fafc; outline: none; }
+  select:focus, input[type=date]:focus { border-color: #1a3a6e; }
+  select { min-width: 190px; }
+
+  .formula-box { background: #f0f4ff; border: 1px solid #c8d8f8; border-radius: 7px; padding: 9px 13px; font-size: 11px; color: #333; margin-bottom: 10px; line-height: 2.2; }
+  .tag { display: inline-block; padding: 1px 7px; border-radius: 3px; font-size: 10px; font-weight: 700; }
+  .tag.auto  { background: #ddeeff; color: #1a3a6e; }
+  .tag.sub   { background: #fde8e8; color: #b92d2d; }
+  .tag.soma  { background: #d4edda; color: #0d6c34; }
+  .tag.igual { background: #1a3a6e; color: #fff; }
+
+  .info-box { background: #eef2fa; border-left: 3px solid #1a3a6e; border-radius: 0 7px 7px 0; padding: 9px 12px; font-size: 11px; color: #444; margin-bottom: 12px; line-height: 1.8; }
+  .info-box strong { color: #1a3a6e; }
+
+  .tbl-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+
+  thead th { padding: 5px 6px; font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; border: 1px solid rgba(255,255,255,0.15); text-align: center; white-space: nowrap; }
+  thead th.left { text-align: left; }
+
+  .th-ag    { background: #1a3a6e; color: #fff; }
+  .th-meta  { background: #2e5fa3; color: #fff; }
+  .th-acum  { background: #0d6e56; color: #fff; }
+  .th-deduz { background: #7b3fa0; color: #fff; }
+  .th-net   { background: #0d3d2d; color: #fff; }
+  .th-day   { background: #4a6080; color: #fff; }
+  .th-calc  { background: #0d5a43; color: #fff; }
+
+  tbody td { padding: 4px 6px; border: 1px solid #e8eaf0; text-align: right; vertical-align: middle; font-size: 11px; }
+  tbody td.ag       { text-align: left; font-weight: 600; color: #1a3a6e; background: #f5f7fb; white-space: nowrap; min-width: 90px; }
+  tbody td.auto-val { background: #eef4fb; font-style: italic; color: #444; font-weight: 600; }
+  tbody td.saldo    { font-weight: 700; }
+  tbody td.net-dia  { font-weight: 700; font-size: 11px; }
+  tbody td.net-dia.pos { background: #e8f5f0; color: #0d7a5f; }
+  tbody td.net-dia.neg { background: #fde8e8; color: #b92d2d; }
+  tbody td.net-acum { background: #dff0e8; font-weight: 700; font-size: 11px; }
+  tbody td.net-proj { background: #e8f5f0; font-weight: 700; font-size: 11px; }
+  tbody td.pos { color: #0d7a5f; font-weight: 700; }
+  tbody td.neg { color: #b92d2d; font-weight: 700; background: #fff5f5; }
+  tbody tr:hover td          { background: #f2f5fb; }
+  tbody tr:hover td.ag       { background: #e8edf8; }
+  tbody tr:hover td.auto-val { background: #e4eef8; }
+  tbody tr:hover td.net-dia.pos { background: #d8eee6; }
+  tbody tr:hover td.net-dia.neg { background: #fbd0d0; }
+  tbody tr:hover td.net-acum { background: #cce8da; }
+
+  tr.reg td { background: #1a3a6e !important; color: #fff !important; font-weight: 700; border-color: #15306a !important; }
+  tr.reg td.ag { color: #fff !important; }
+  tr.reg .pos  { color: #90ee90 !important; }
+  tr.reg .neg  { color: #ff9999 !important; }
+
+  .pos { color: #0d7a5f; font-weight: 700; }
+  .neg { color: #b92d2d; font-weight: 700; }
+
+  input[type=number].val { width: 100%; border: 1px solid #d0d5e0; border-radius: 4px; padding: 3px 5px; font-size: 11px; text-align: right; background: #fafbfd; color: #1a1a2e; outline: none; min-width: 72px; }
+  input[type=number].val:focus { border-color: #1a3a6e; box-shadow: 0 0 0 2px rgba(26,58,110,0.1); }
+
+  .prog-wrap { margin-top: 10px; }
+  .prog-top  { display: flex; justify-content: space-between; font-size: 10px; color: #888; margin-bottom: 3px; }
+  .prog-bar  { background: #e8eaf0; border-radius: 20px; height: 9px; overflow: hidden; }
+  .prog-fill { height: 100%; border-radius: 20px; transition: width 0.5s; background: #b92d2d; }
+  .prog-fill.warn { background: #e67e22; }
+  .prog-fill.ok   { background: #0d7a5f; }
+
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .btn { border-radius: 7px; padding: 9px 20px; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; border: none; }
+  .btn-primary   { background: #1a3a6e; color: #fff; }
+  .btn-primary:hover { background: #15306a; }
+  .btn-secondary { background: #fff; color: #555; border: 1px solid #d0d5e0; font-weight: 500; }
+  .btn-secondary:hover { background: #f4f6f9; }
+  .btn-sm { padding: 6px 12px; font-size: 11px; }
+
+  .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.4); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .toast { position: fixed; bottom: 20px; right: 20px; background: #0d7a5f; color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 12px; font-weight: 600; opacity: 0; transform: translateY(8px); transition: all 0.3s; pointer-events: none; z-index: 999; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.error { background: #b92d2d; }
+
+  .badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 20px; display: inline-block; }
+  .badge.ok      { background: #d4edda; color: #0d6c34; }
+  .badge.pending { background: #fff3cd; color: #856404; }
+
+  .painel-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .last-update { font-size: 10px; color: #888; }
+  .progress-bar-wrap { background: #e8eaf0; border-radius: 20px; height: 7px; margin: 6px 0 3px; overflow: hidden; }
+  .progress-bar-fill { background: #1a3a6e; height: 100%; border-radius: 20px; transition: width 0.5s; }
+  .progress-label { font-size: 10px; color: #888; }
+  .pendente-list  { font-size: 10px; color: #b85c00; margin-top: 3px; }
+
+
+  /* Filter bar */
+  .filter-bar { display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px; }
+  .filter-bar input[type=text] { padding:6px 10px;border:1px solid #d0d5e0;border-radius:7px;font-size:12px;color:#1a1a2e;background:#f9fafc;outline:none;min-width:160px; }
+  .filter-bar input[type=text]:focus { border-color:#1a3a6e; }
+  .btn-filtrar { background:#1a3a6e;color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer; }
+  .btn-filtrar:hover { background:#15306a; }
+  .btn-limpar-painel { background:#fff;color:#b92d2d;border:1px solid #f0c0c0;border-radius:7px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer; }
+  .btn-limpar-painel:hover { background:#fff5f5; }
+  .btn-sair { background:transparent;color:rgba(255,255,255,0.7);border:1px solid rgba(255,255,255,0.3);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;margin-left:8px; }
+  .btn-sair:hover { color:#fff;border-color:rgba(255,255,255,0.6); }
+  .btn-email { background:#0d7a5f;color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px; }
+  .btn-email:hover { background:#0a6350; }
+  .btn-email:disabled { opacity:0.6;cursor:not-allowed; }
+
+  /* Ranking */
+  .ranking-list { list-style:none; margin:0; padding:0; }
+  .ranking-item { display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid #f0f2f7; font-size:11px; }
+  .ranking-item:last-child { border-bottom:none; }
+  .rank-pos  { width:20px; height:20px; border-radius:50%; display:flex;align-items:center;justify-content:center; font-size:10px; font-weight:700; flex-shrink:0; }
+  .rank-1 { background:#fbbf24;color:#78350f; }
+  .rank-2 { background:#d1d5db;color:#374151; }
+  .rank-3 { background:#cd7c3a;color:#fff; }
+  .rank-n { background:#e8eaf0;color:#555; }
+  .rank-info { flex:1; }
+  .rank-name { font-weight:600; color:#1a3a6e; }
+  .rank-ag   { font-size:10px; color:#888; }
+  .rank-bar-wrap { width:80px; height:6px; background:#e8eaf0; border-radius:3px; overflow:hidden; }
+  .rank-bar-fill { height:100%; border-radius:3px; background:#1a3a6e; transition:width 0.5s; }
+  .rank-val  { font-size:11px; font-weight:700; color:#1a3a6e; min-width:28px; text-align:right; }
+  .rank-meta { font-size:10px; color:#aaa; }
+
+  /* Gerentes modal */
+  .ger-modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;display:none; }
+  .ger-modal-box { background:#fff;border-radius:12px;padding:22px 24px;width:480px;max-width:95vw;max-height:85vh;overflow-y:auto; }
+  .ger-modal-box h2 { font-size:14px;font-weight:700;color:#1a3a6e;margin-bottom:14px; }
+  .ger-table { width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px; }
+  .ger-table th { background:#1a3a6e;color:#fff;padding:7px 10px;text-align:left;font-size:11px; }
+  .ger-table td { padding:6px 10px;border-bottom:1px solid #e8eaf0;vertical-align:middle; }
+  .ger-table input { width:100%;border:1px solid #d0d5e0;border-radius:5px;padding:4px 7px;font-size:12px;outline:none; }
+  .ger-table input:focus { border-color:#1a3a6e; }
+  .btn-ger-add { background:#0d7a5f;color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer; }
+  .btn-ger-del { background:none;border:none;color:#b92d2d;cursor:pointer;font-size:14px;padding:2px 6px; }
+  .btn-ger-close { background:#f0f2f7;color:#555;border:none;border-radius:7px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;margin-left:8px; }
+  .gd-table { width:100%;border-collapse:collapse;font-size:12px;margin-bottom:10px; }
+  .gd-table th { background:#1a3a6e;color:#fff;padding:7px 10px;text-align:left;font-size:11px; }
+  .gd-table td { padding:6px 10px;border-bottom:1px solid #e8eaf0;vertical-align:middle; }
+  .gd-table input { width:100%;border:1px solid #d0d5e0;border-radius:4px;padding:4px 6px;font-size:11px;text-align:right;outline:none; }
+  .gd-table input:focus { border-color:#1a3a6e; }
+  .btn-gd-save { background:#0d7a5f;color:#fff;border:none;border-radius:5px;padding:4px 12px;font-size:11px;font-weight:600;cursor:pointer; }
+  .btn-gd-del  { background:#fff;color:#b92d2d;border:1px solid #f0c0c0;border-radius:5px;padding:4px 9px;font-size:11px;cursor:pointer; }
+
+  /* Conta/Agend card na aba GG */
+  .extra-fields { display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px; }
+  .extra-field  { background:#f5f7fb;border:1px solid #e0e4ec;border-radius:8px;padding:10px 12px; }
+  .extra-field label { font-size:11px;font-weight:600;color:#1a3a6e;display:block;margin-bottom:5px; }
+  .extra-field .meta-hint { font-size:10px;color:#888;margin-bottom:4px; }
+  .extra-field input { width:100%;border:1px solid #d0d5e0;border-radius:5px;padding:6px 8px;font-size:13px;text-align:right;outline:none;background:#fff; }
+  .extra-field input:focus { border-color:#1a3a6e; }
+  .pct-badge { display:inline-block;margin-top:4px;font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px; }
+  .pct-ok  { background:#d4edda;color:#0d6c34; }
+  .pct-low { background:#fff3cd;color:#856404; }
+  .pct-zero{ background:#fde8e8;color:#b92d2d; }
+
+  /* Botão gerenciar gerentes */
+  .btn-gerentes { background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:6px;padding:5px 11px;font-size:11px;font-weight:600;cursor:pointer; }
+  .btn-gerentes:hover { background:rgba(255,255,255,0.25); }
+
+  /* Pipe por gerente */
+  .pipe-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:8px; margin-bottom:12px; }
+  .pipe-card { background:#fff; border:1px solid #e0e4ec; border-radius:8px; padding:12px 14px; position:relative; overflow:hidden; }
+  .pipe-card::after { content:''; position:absolute; bottom:0; left:0; right:0; height:3px; }
+  .pipe-card.q1-card::after { background:#1a3a6e; }
+  .pipe-card.q2-card::after { background:#0d7a5f; }
+  .pipe-card.q3-card::after { background:#e67e22; }
+  .pipe-card.q4-card::after { background:#b92d2d; }
+  .pipe-card .pc-badge { font-size:9px;font-weight:700;padding:1px 7px;border-radius:20px;display:inline-block;margin-bottom:6px; }
+  .q1-badge { background:#1a3a6e;color:#fff; }
+  .q2-badge { background:#0d7a5f;color:#fff; }
+  .q3-badge { background:#e67e22;color:#fff; }
+  .q4-badge { background:#b92d2d;color:#fff; }
+  .pipe-card .pc-empresa { font-size:11px;font-weight:700;color:#1a3a6e;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+  .pipe-card .pc-gerente { font-size:10px;color:#888;margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+  .pipe-card .pc-valor   { font-size:16px;font-weight:700;color:#1a3a6e; }
+
+  .quartil-cortes { background:#f5f7fb;border-radius:6px;padding:8px;font-size:10px; }
+  .quartil-cortes table { width:100%;border-collapse:collapse; }
+  .corte-input { width:80px;border:1px solid #d0d5e0;border-radius:4px;padding:3px 6px;font-size:11px;text-align:right;outline:none; }
+  .corte-input:focus { border-color:#1a3a6e; }
+  .btn-aplicar-corte { background:#1a3a6e;color:#fff;border:none;border-radius:5px;padding:4px 12px;font-size:11px;font-weight:600;cursor:pointer;margin-top:6px; }
+  .btn-aplicar-corte:hover { background:#15306a; }
+  .quartil-cortes th { padding:3px 6px;font-weight:700;color:#1a3a6e;text-align:center;font-size:10px; }
+  .quartil-cortes td { padding:3px 6px;text-align:center;color:#555;font-size:10px;border-top:1px solid #e8eaf0; }
+  .qc-q1 { color:#1a3a6e;font-weight:700; }
+  .qc-q2 { color:#0d7a5f;font-weight:700; }
+  .qc-q3 { color:#e67e22;font-weight:700; }
+  .qc-q4 { color:#b92d2d;font-weight:700; }
+
+  /* Retorno por gerente */
+  .retorno-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px; }
+  .retorno-card { background:#fff; border-radius:10px; border:1px solid #e0e4ec; padding:14px 16px; position:relative; overflow:hidden; }
+  .retorno-card::before { content:''; position:absolute; top:0; left:0; width:4px; height:100%; background:#e0e4ec; }
+  .retorno-card.meta-ok::before  { background:#0d7a5f; }
+  .retorno-card.meta-mid::before { background:#e67e22; }
+  .retorno-card.meta-low::before { background:#b92d2d; }
+  .retorno-card .rc-gerente { font-size:12px; font-weight:700; color:#1a3a6e; margin-bottom:2px; padding-left:6px; }
+  .retorno-card .rc-agencia { font-size:10px; color:#888; margin-bottom:10px; padding-left:6px; }
+  .retorno-card .rc-num     { font-size:28px; font-weight:700; color:#1a3a6e; text-align:center; margin:4px 0; }
+  .retorno-card .rc-meta    { font-size:10px; color:#888; text-align:center; margin-bottom:8px; }
+  .retorno-card .rc-bar-wrap{ height:6px; background:#f0f2f7; border-radius:3px; overflow:hidden; margin-bottom:6px; }
+  .retorno-card .rc-bar     { height:100%; border-radius:3px; transition:width 0.5s; }
+  .retorno-card .rc-pct     { font-size:11px; font-weight:700; text-align:center; }
+  .retorno-vazio { color:#aaa; font-size:12px; text-align:center; padding:20px; }
+
+  /* Totalizador retorno */
+  .retorno-total { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; background:#f5f7fb; border-radius:8px; padding:10px 14px; margin-bottom:12px; }
+  .retorno-total .rt-item { text-align:center; }
+  .retorno-total .rt-label { font-size:10px; color:#888; font-weight:600; text-transform:uppercase; }
+  .retorno-total .rt-val   { font-size:18px; font-weight:700; color:#1a3a6e; }
+  .retorno-total .rt-val.blue  { color:#185FA5; }
+  .retorno-total .rt-val.green { color:#0d7a5f; }
+  .retorno-total .rt-val.red   { color:#b92d2d; }
+
+  /* Limpar botão na aba GG */
+  .btn-limpar-gg { background:#fff;color:#b92d2d;border:1px solid #f0c0c0;border-radius:7px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer; }
+  .btn-limpar-gg:hover { background:#fff5f5; }
+  input[list] { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23999' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 8px center; padding-right:28px; }
+  .prod-input { width:100%;border:1px solid #d0d5e0;border-radius:4px;padding:5px 7px;font-size:11px;text-align:right;background:#fafbfd;color:#1a1a2e;outline:none;min-width:80px; }
+  .prod-input:focus { border-color:#1a3a6e;box-shadow:0 0 0 2px rgba(26,58,110,0.1); }
+  .prod-calc { font-weight:700;font-size:11px;text-align:right;padding:6px 8px; }
+  .prod-calc.pos { color:#0d7a5f; font-weight:700; }
+  .prod-calc.neg { color:#b92d2d; font-weight:700; background:#fff5f5; border-radius:4px; }
+  .btn-salvar-ger { background:#1a3a6e;color:#fff;border:none;border-radius:5px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap; }
+  .btn-salvar-ger:hover { background:#15306a; }
+  .btn-limpar-ger { background:#fff;color:#888;border:1px solid #d0d5e0;border-radius:5px;padding:5px 8px;font-size:11px;cursor:pointer; }
+  .btn-limpar-ger:hover { background:#f4f6f9; }
+  .prod-row-saved { background:#f0fbf7; }
+  .prod-row-saved td { color:#0d7a5f; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>📊 Produção Diária — Agências</h1>
+    <div class="sub" id="header-date"></div>
+  </div>
+
+  <div class="dash">
+    <!-- Relógio VOP -->
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <!-- Relógio 1: VOP realizado vs meta -->
+      <div style="display:flex;align-items:center;gap:6px">
+        <div class="vop-clock-wrap">
+          <svg viewBox="0 0 36 36">
+            <circle class="vop-clock-bg" cx="18" cy="18" r="15.9"/>
+            <circle class="vop-clock-arc" id="vop-arc" cx="18" cy="18" r="15.9"
+              stroke-dasharray="100 100" stroke-dashoffset="100"/>
+          </svg>
+          <div class="vop-clock-text">
+            <span class="vop-clock-pct" id="vop-clock-pct">0%</span>
+            <span class="vop-clock-lbl">VOP</span>
+          </div>
+        </div>
+        <div class="dash-card" style="min-width:90px;text-align:left;background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.15)">
+          <div class="dc-label">VOP Acum. Mês</div>
+          <div class="dc-val" id="dash-real">R$ 0</div>
+          <div class="dc-sub">meta <span id="dash-meta">R$ 0</span></div>
+        </div>
+      </div>
+      <!-- Relógio 2: Projeção (onde deveria estar no dia de hoje) -->
+      <div style="display:flex;align-items:center;gap:6px">
+        <div class="vop-clock-wrap">
+          <svg viewBox="0 0 36 36">
+            <circle class="vop-clock-bg" cx="18" cy="18" r="15.9"/>
+            <circle class="vop-clock-arc" id="proj-arc" cx="18" cy="18" r="15.9"
+              stroke-dasharray="100 100" stroke-dashoffset="100" style="stroke:#facc15"/>
+          </svg>
+          <div class="vop-clock-text">
+            <span class="vop-clock-pct" id="proj-clock-pct" style="color:#facc15">0%</span>
+            <span class="vop-clock-lbl">Proj</span>
+          </div>
+        </div>
+        <div class="dash-card" style="min-width:90px;text-align:left;background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.15)">
+          <div class="dc-label">Meta até hoje</div>
+          <div class="dc-val" id="dash-meta-hoje" style="color:#facc15">R$ 0</div>
+          <div class="dc-sub" id="dash-proj-sub">dia 0 de 0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cards resumo -->
+    <div class="dash-card">
+      <div class="dc-label">Net Dia</div>
+      <div class="dc-val" id="dash-netdia">R$ 0</div>
+      <div class="dc-sub" id="dash-netdia-sub">—</div>
+    </div>
+    <div class="dash-card">
+      <div class="dc-label">Net Acumulado</div>
+      <div class="dc-val" id="dash-netacum">R$ 0</div>
+      <div class="dc-sub" id="dash-netacum-sub">—</div>
+    </div>
+    <div class="dash-card">
+      <div class="dc-label">VOP Dia</div>
+      <div class="dc-val" id="dash-vopdia">R$ 0</div>
+      <div class="dc-sub">desc+ant+lp</div>
+    </div>
+    <div class="dash-card">
+      <div class="dc-label">Net Proj. Mês</div>
+      <div class="dc-val" id="dash-netproj">R$ 0</div>
+      <div class="dc-sub" id="dash-netproj-sub">regional</div>
+    </div>
+    <button class="btn-gerentes" onclick="abrirNovoMes()" style="background:#e67e22;border-color:#e67e22">📅 Novo Mês</button>
+    <button class="btn-gerentes" onclick="abrirGerentes()">👥 Gerenciar Gerentes</button>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="showTab('lancamento')">✏️ Lançar Produção</div>
+  <div class="tab" onclick="showTab('gg')">📊 Produtividade</div>
+  <div class="tab" id="tab-painel" onclick="showTab('painel')">📈 Painel Regional</div>
+  <div class="tab" onclick="showTab('trimestre')">📆 Trimestre</div>
+</div>
+
+<!-- ══════════════════ ABA 1 ══════════════════ -->
+<div class="page active" id="page-lancamento">
+<div class="container">
+
+  <div class="info-box">
+    <strong>Quadro de Cima (Mensal):</strong> Preencha <strong>apenas no primeiro dia do mês</strong>. Nos dias seguintes, ao selecionar sua agência, os campos mostram o <strong>saldo acumulado deduzido</strong> de todos os dias do mês. Para redefinir os valores iniciais, clique em <a href="#" onclick="resetarMes(event)" style="color:#1a3a6e;font-weight:700">🔄 Novo Mês</a>.<br>
+    <strong>Quadro de Baixo (Diário):</strong> Preencha todo dia.
+    <strong>VOP Dia</strong> = Prod.Desconto + Ant/Demais + Longo Prazo (auto). <strong>Net Acumulado</strong> = Saldo Liq + Net Atual. <strong>Net Proj.</strong> = Net Acum + Sd.Desc + Sd.ARV + Quente.
+  </div>
+
+  <!-- Identificação -->
+  <div class="card">
+    <div class="card-title">Identificação</div>
+    <div class="field-row">
+      <label>Agência:</label>
+      <select id="agency-select" onchange="syncNomes()">
+        <option value="">— Selecione —</option>
+        <option>Alphaville</option><option>Lapa</option><option>Osasco</option>
+        <option>Santana</option><option>Vila Maria</option><option>Sorocaba</option>
+        <option>Tatuape</option><option>Cidade Jardim</option><option>Santo Amaro</option>
+        <option>JK</option><option>Itaim</option><option>Sumaré</option>
+      </select>
+      <label>Data:</label>
+      <input type="date" id="ref-date" onchange="atualizarDashTotal(this.value)">
+    </div>
+  </div>
+
+  <!-- ══ QUADRO DE CIMA — MENSAL ══ -->
+  <div class="card">
+    <div class="card-title">
+      📅 Quadro Mensal / Acumulado
+      <span class="pill pill-blue">Informar uma vez no início do mês</span>
+    </div>
+    <div class="formula-box">
+      <span class="tag sub">DEDUZ diariamente</span>
+      Desc. Inicial <span class="tag sub">− Prod.Desconto</span> &nbsp;|&nbsp;
+      ARV Projetado <span class="tag sub">− Ant/Demais</span> &nbsp;|&nbsp;
+      Quente <span class="tag sub">− Quente diário</span> &nbsp;|&nbsp;
+      Liq. Inicial <span class="tag sub">− Liquidação diária</span><br>
+      <span class="tag soma">ACUMULA</span> Realizado VOP = soma (Desc + Ant/Demais + Longo Prazo) de cada dia<br>
+      <span class="tag igual">SALDO LIQ</span> = Sd.Liq + Liquidação dia &nbsp;|&nbsp; <span class="tag igual">NET ACUMULADO</span> = Net Dia + Saldo Liq &nbsp;|&nbsp; <span class="tag igual">NET PROJ MÊS</span> = Sd.Desc + Sd.ARV + Quente + Net Ant + Liq
+    </div>
+    <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th class="left th-ag" style="min-width:85px">Agência</th>
+          <th class="th-meta">Meta VOP</th>
+          <th class="th-acum">Realizado VOP ⚡</th>
+          <th class="th-deduz">Desc. Ini.</th>
+          <th class="th-deduz">Saldo Desc ⚡</th>
+          <th class="th-deduz">Quente</th>
+          <th class="th-deduz">Sd. Quente ⚡</th>
+          <th class="th-deduz">ARV Proj.</th>
+          <th class="th-deduz">Saldo ARV ⚡</th>
+          <th class="th-deduz">Liq. Total</th>
+          <th class="th-deduz">Saldo Liq ⚡</th>
+          <th class="th-day">Net Atual</th>
+          <th class="th-net">Net Acum ⚡<br><small style="font-size:8px;font-weight:400">Net Dia + Sd.Liq</small></th>
+          <th class="th-net">Net Proj. Mês ⚡</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="ag" id="td-ag-m">— Selecione —</td>
+          <td><input type="number" class="val" id="m-metaVop"   placeholder="0" oninput="calcTudo();salvarIniciaisCima()"></td>
+          <td class="auto-val" id="td-realVop">R$ 0</td>
+          <td><input type="number" class="val" id="m-descIni"   placeholder="0" oninput="calcTudo();salvarIniciaisCima()"></td>
+          <td class="saldo" id="td-saldoDesc">R$ 0</td>
+          <td><input type="number" class="val" id="m-quenteIni" placeholder="0" oninput="calcTudo();salvarIniciaisCima()"></td>
+          <td class="saldo" id="td-saldoQuente">R$ 0</td>
+          <td><input type="number" class="val" id="m-arvIni"    placeholder="0" oninput="calcTudo();salvarIniciaisCima()"></td>
+          <td class="saldo" id="td-saldoArv">R$ 0</td>
+          <td><input type="number" class="val" id="m-liqIni"    placeholder="0" oninput="calcTudo();salvarIniciaisCima()"></td>
+          <td class="saldo" id="td-saldoLiq">R$ 0</td>
+          <td><input type="number" class="val" id="m-netDiaAnt" placeholder="Net atual" oninput="calcTudo();salvarIniciaisCima()"></td>
+          <td class="net-acum" id="td-netAcumCima">R$ 0</td>
+          <td class="net-proj" id="td-netProj">R$ 0</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="prog-wrap">
+      <div class="prog-top">
+        <span id="prog-txt">Realizado VOP: R$ 0 de R$ 0</span>
+        <span id="prog-pct">0%</span>
+      </div>
+      <div class="prog-bar"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <!-- ══ QUADRO DE BAIXO — DIÁRIO ══ -->
+  <div class="card">
+    <div class="card-title">
+      📆 Quadro Diário
+      <span class="pill pill-green">Preencher todo dia</span>
+    </div>
+    <div class="formula-box">
+      <span class="tag auto">AUTO ⚡</span>
+      <span class="tag igual">VOP DIA</span> = Prod.Desconto + Ant/Demais + Longo Prazo &nbsp;|&nbsp;
+      <span class="tag igual">NET DIA</span> = VOP Dia − Liquidação
+    </div>
+    <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th class="left th-ag" style="min-width:115px">Agência</th>
+          <th class="th-day">Prod. Desconto</th>
+          <th class="th-day">Ant / Demais<br><small style="font-size:9px;font-weight:400;opacity:0.85">= ARV do dia</small></th>
+          <th class="th-day">Longo Prazo</th>
+          <th class="th-day">Liquidação Total</th>
+          <th class="th-calc">VOP Dia ⚡<br><small style="font-size:9px;font-weight:400">Desc+Ant+LP</small></th>
+          <th class="th-net">Net Dia ⚡<br><small style="font-size:9px;font-weight:400">VOP Dia − Liq</small></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="ag" id="td-ag-d">— Selecione —</td>
+          <td><input type="number" class="val" id="d-desc"    placeholder="0" oninput="calcTudo()"></td>
+          <td><input type="number" class="val" id="d-ant"     placeholder="0" oninput="calcTudo()"></td>
+          <td><input type="number" class="val" id="d-lp"      placeholder="0" oninput="calcTudo()"></td>
+          <td><input type="number" class="val" id="d-liq"     placeholder="0" oninput="calcTudo()"></td>
+          <td class="auto-val" id="td-vopDia">R$ 0</td>
+          <td class="net-dia"  id="td-netDia">R$ 0</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="actions">
+      <button class="btn btn-primary" id="btn-enviar" onclick="submitData()">
+        <span id="btn-text">Enviar Produção do Dia</span>
+        <span class="spinner" id="spinner" style="display:none"></span>
+      </button>
+      <button class="btn btn-secondary" onclick="clearForm()">Limpar</button>
+      <button class="btn btn-secondary" onclick="abrirGerenciarDia()" style="color:#1a3a6e;border-color:#1a3a6e">📋 Gerenciar Prod. do Dia</button>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ══════════════════ ABA PRODUTIVIDADE ══════════════════ -->
+<div class="page" id="page-gg">
+<div class="container">
+
+  <div class="info-box">
+    <strong>Produtividade:</strong> Cada gerente preenche seus dados diários aqui.
+    <strong>Produção VOP</strong> = Prod.Desconto + Ant/Demais + Longo Prazo.
+    Cortes: <strong>Q1 &gt; R$25M</strong> | <strong>Q2 &gt; R$19M</strong> | <strong>Q3 &gt; R$13M</strong>.
+  </div>
+
+  <!-- Mini-dash: Net Projetado por agência -->
+  <div id="mini-dash-netproj" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px"></div>
+
+  <!-- ── SEÇÃO 3: PRODUÇÃO DIÁRIA DETALHADA ── -->
+  <div class="card">
+    <div class="card-title" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <span>📅 Produção Diária — Histórico por Agência</span>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="diario-filtro-ag" onchange="sincronizarAgencia(this.value)" style="padding:5px 8px;border:1px solid #d0d5e0;border-radius:6px;font-size:12px">
+          <option value="">Todas as agências</option>
+          <option>Alphaville</option><option>Lapa</option><option>Osasco</option>
+          <option>Santana</option><option>Vila Maria</option><option>Sorocaba</option>
+          <option>Tatuape</option><option>Cidade Jardim</option><option>Santo Amaro</option>
+          <option>JK</option><option>Itaim</option><option>Sumaré</option>
+        </select>
+        <input type="month" id="diario-mes" onchange="renderDiario()" style="padding:5px 8px;border:1px solid #d0d5e0;border-radius:6px;font-size:12px">
+        <input type="date" id="diario-dia" onchange="renderDiario()" style="padding:5px 8px;border:1px solid #d0d5e0;border-radius:6px;font-size:12px" title="Filtrar por dia específico">
+        <button class="btn-filtrar" onclick="document.getElementById('diario-dia').value='';renderDiario()" style="font-size:11px;padding:5px 10px">✕ Dia</button>
+        <button class="btn btn-secondary btn-sm" onclick="renderDiario()">↻ Atualizar</button>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th class="left th-ag" style="min-width:80px">Data</th>
+          <th class="th-ag">Agência</th>
+          <th class="th-day">Prod. Desc.</th>
+          <th class="th-day">Ant/Demais</th>
+          <th class="th-day">Longo Prazo</th>
+          <th class="th-day">Liquidação</th>
+          <th class="th-calc">Produção ⚡</th>
+          <th class="th-net">Net Dia ⚡</th>
+          <th class="th-ag">✏️</th>
+        </tr>
+      </thead>
+      <tbody id="tbody-diario-prod">
+        <tr><td colspan="9" style="text-align:center;color:#aaa;padding:14px">Selecione uma agência para ver o histórico</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <!-- ── SEÇÃO 1: PREENCHIMENTO DIÁRIO POR GERENTE ── -->
+  <div class="card">
+    <div class="card-title">
+      ✏️ Lançamento Diário por Gerente
+      <span class="pill pill-green">Cada gerente preenche sua linha</span>
+    </div>
+
+    <select id="prod-agency" style="display:none">
+      <option value="">— Selecione —</option>
+      <option>Alphaville</option><option>Lapa</option><option>Osasco</option>
+      <option>Santana</option><option>Vila Maria</option><option>Sorocaba</option>
+      <option>Tatuape</option><option>Cidade Jardim</option><option>Santo Amaro</option>
+      <option>JK</option><option>Itaim</option><option>Sumaré</option>
+    </select>
+    <div class="field-row" style="margin-bottom:12px">
+      <label>Data:</label>
+      <input type="date" id="prod-data">
+      <button class="btn btn-secondary btn-sm" onclick="renderGerentesAgencia()">↻ Atualizar</button>
+    </div>
+
+    <!-- Tabela de gerentes para preenchimento -->
+    <div class="tbl-wrap">
+    <table id="prod-input-table">
+      <thead>
+        <tr>
+          <th class="left th-ag" style="min-width:150px">Gerente / Data</th>
+          <th class="th-day">Prod. Desconto</th>
+          <th class="th-day">Ant / Demais</th>
+          <th class="th-day">Longo Prazo</th>
+          <th class="th-day">Liquidação</th>
+          <th class="th-calc">Produção ⚡</th>
+          <th class="th-net">Net ⚡</th>
+          <th class="th-ag">Ações</th>
+        </tr>
+      </thead>
+      <tbody id="tbody-prod-input">
+        <tr><td colspan="8" style="text-align:center;color:#aaa;padding:16px">Selecione a agência acima para ver os gerentes</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <!-- ── SEÇÃO 2: CONSOLIDADO MENSAL ── -->
+  <div class="card">
+    <div class="card-title">Período — Consolidado Mensal</div>
+    <div class="field-row">
+      <label>Mês/Ano:</label>
+      <input type="month" id="prod-mes" onchange="renderProdutividade();renderMiniDashNetProj()">
+      <input type="date" id="prod-dia-limpar" style="display:none">
+      <button class="btn btn-secondary btn-sm" onclick="renderProdutividade()">↻ Atualizar</button>
+    </div>
+  </div>
+
+  <!-- Edição por Data/Gerente -->
+  <div class="card" id="card-edicao-dia" style="display:none">
+    <div class="card-title" style="justify-content:space-between">
+      <span>✏️ Editar Produção por Data</span>
+      <button class="btn-ger-close" onclick="fecharEdicaoDia()">✕ Fechar</button>
+    </div>
+    <div id="edicao-dia-content">
+      <div style="color:#aaa;font-size:12px;text-align:center;padding:16px">Selecione a data acima e clique em Editar dia</div>
+    </div>
+  </div>
+
+  <!-- Totalizador -->
+  <div class="retorno-total" id="prod-total" style="display:none;margin-bottom:12px">
+    <div class="rt-item"><div class="rt-label">Produção Total</div><div class="rt-val" id="prod-pipe-total" style="color:#185FA5">R$ 0</div></div>
+    <div class="rt-item"><div class="rt-label">Liquidação Total</div><div class="rt-val" id="prod-liq-total">R$ 0</div></div>
+    <div class="rt-item"><div class="rt-label">Gerentes</div><div class="rt-val" id="prod-ag-count" style="color:#185FA5">0</div></div>
+    <div class="rt-item"><div class="rt-label">Dias lançados</div><div class="rt-val" id="prod-dias-count" style="color:#185FA5">0</div></div>
+  </div>
+
+  <!-- Cards pipe -->
+  <div class="card">
+    <div class="card-title">💼 Produção por Gerente — acumulado do mês <span class="pill pill-blue">todos os gerentes / todas as agências</span></div>
+    <div class="pipe-grid" id="prod-pipe-grid">
+      <div style="color:#aaa;font-size:11px;padding:8px">Selecione o mês para ver</div>
+    </div>
+  </div>
+
+
+
+
+</div>
+</div>
+
+<!-- ══════════════════ ABA 2 — PAINEL REGIONAL ══════════════════ -->
+<div class="page" id="page-painel">
+<div class="container">
+
+  <div class="card">
+    <div class="painel-header">
+      <div>
+        <div class="card-title" style="margin-bottom:3px">Consolidado Regional</div>
+        <div class="last-update" id="last-update">—</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <label style="font-size:11px;color:#555">Data:</label>
+        <input type="date" id="painel-date" onchange="carregarPainel()">
+        <button class="btn btn-secondary btn-sm" onclick="carregarPainel()">↻ Atualizar</button>
+      </div>
+    </div>
+    <div class="progress-bar-wrap"><div class="progress-bar-fill" id="p-fill" style="width:0%"></div></div>
+    <div class="progress-label" id="p-label">—</div>
+    <div class="pendente-list"  id="p-pend"></div>
+
+    <!-- Filtro e limpeza -->
+    <div class="filter-bar" style="margin-top:12px">
+      <button class="btn btn-secondary btn-sm" onclick="inspecionarDados()" style="background:#555;color:#fff;border:none">🔍 Inspecionar dados</button>
+      <input type="text" id="filtro-agencia" placeholder="🔍 Filtrar agência..." oninput="filtrarTabelas()">
+      <button class="btn-filtrar" onclick="filtrarTabelas()">Filtrar</button>
+      <button class="btn-limpar-painel" onclick="limparFiltro()">✕ Limpar filtro</button>
+      <button class="btn-email" id="btn-email" onclick="enviarEmailConsolidado()">
+        <span id="email-icon">📧</span> Enviar consolidado por e-mail
+      </button>
+    </div>
+  </div>
+
+
+  <!-- Cards por Agência com relógio e quartil -->
+  <div class="card">
+    <div class="card-title">🏦 Desempenho por Agência
+      <span class="pill pill-blue">Q1&gt;50,7k | Q2&gt;39,3k | Q3&gt;23,8k</span>
+    </div>
+    <div class="ag-cards-grid" id="ag-cards-grid">
+      <div style="color:#aaa;font-size:11px;padding:8px">Carregando...</div>
+    </div>
+  </div>
+
+  <!-- Quartis Regional -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+
+    <!-- Quartil Gerentes -->
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">📊 Quartil Gerentes
+        <span class="pill pill-blue">Q1&gt;25M | Q2&gt;19M | Q3&gt;13M</span>
+      </div>
+      <div id="quartil-ger-bars" style="display:flex;align-items:flex-end;justify-content:center;gap:20px;height:90px;margin:10px 0 6px"></div>
+      <div id="quartil-ger-table"></div>
+    </div>
+
+    <!-- Quartil Agências -->
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">📊 Quartil Agências
+        <span class="pill pill-green">Q1&gt;50M | Q2&gt;39M | Q3&gt;24M</span>
+      </div>
+      <div id="quartil-ag-bars" style="display:flex;align-items:flex-end;justify-content:center;gap:20px;height:90px;margin:10px 0 6px"></div>
+      <div id="quartil-ag-table"></div>
+    </div>
+  </div>
+
+  <!-- Painel Mensal -->
+  <div class="card">
+    <div class="card-title">📅 Quadro Mensal — Regional <span class="pill pill-blue">Consolidado</span></div>
+    <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th class="left th-ag" style="min-width:85px">Agência</th>
+          <th class="th-meta">Meta VOP</th>
+          <th class="th-acum">Realizado VOP ⚡</th>
+          <th class="th-deduz">Desc. Inicial</th>
+          <th class="th-deduz">Saldo Desc. ⚡</th>
+          <th class="th-deduz">Quente Inicial</th>
+          <th class="th-deduz">Saldo Quente ⚡</th>
+          <th class="th-deduz">ARV Proj. Ini.</th>
+          <th class="th-deduz">Saldo ARV ⚡</th>
+          <th class="th-deduz">Liq. Inicial</th>
+          <th class="th-deduz">Saldo Liq. ⚡</th>
+          <th class="th-day">Net Dia Anterior<br><small style="font-size:9px;font-weight:400;opacity:0.85">informar</small></th>
+          <th class="th-net">Net Acumulado ⚡<br><small style="font-size:9px;font-weight:400">Ant + Net Dia</small></th>
+          <th class="th-net">Net Projetado ⚡</th>
+          <th class="th-ag">Status</th>
+        </tr>
+      </thead>
+      <tbody id="tbody-mensal">
+        <tr><td colspan="14" style="text-align:center;color:#aaa;padding:14px">Carregando...</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <!-- Painel Diário -->
+  <div class="card">
+    <div class="card-title">📆 Quadro Diário — Regional <span class="pill pill-green" id="lbl-date-painel"></span></div>
+    <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th class="left th-ag" style="min-width:115px">Agências</th>
+          <th class="th-day">Prod. Desconto</th>
+          <th class="th-day">Ant/Demais</th>
+          <th class="th-day">Longo Prazo</th>
+          <th class="th-day">Liquidação</th>
+          <th class="th-calc">VOP Dia ⚡</th>
+          <th class="th-net">Net Dia ⚡</th>
+          <th class="th-net">Net Proj. Mês ⚡</th>
+          <th class="th-ag">Status</th>
+        </tr>
+      </thead>
+      <tbody id="tbody-diario">
+        <tr><td colspan="9" style="text-align:center;color:#aaa;padding:14px">Carregando...</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ══════════════════ ABA TRIMESTRE ══════════════════ -->
+<div class="page" id="page-trimestre">
+<div class="container">
+  <div class="info-box">
+    <strong>Histórico Trimestral:</strong> Ao clicar em <strong>📅 Novo Mês</strong>, os dados do mês atual são arquivados aqui. Consulte o histórico por mês.
+  </div>
+  <div class="card">
+    <div class="card-title" style="justify-content:space-between">
+      <span>📆 Histórico por Mês</span>
+      <select id="trim-mes-sel" onchange="renderTrimestre()" style="padding:5px 10px;border:1px solid #d0d5e0;border-radius:6px;font-size:12px">
+        <option value="">Selecione o mês</option>
+      </select>
+    </div>
+    <div id="trim-content" style="padding:12px;color:#aaa;font-size:12px;text-align:center">Selecione um mês para ver o histórico</div>
+  </div>
+</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Modal de confirmação exclusão -->
+<div id="del-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;padding:24px 28px;max-width:360px;width:90vw;box-shadow:0 8px 32px rgba(0,0,0,0.2)">
+    <div style="font-size:14px;font-weight:700;color:#b92d2d;margin-bottom:8px">🗑 Excluir produção</div>
+    <div id="del-modal-msg" style="font-size:12px;color:#555;margin-bottom:18px;line-height:1.6"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button onclick="document.getElementById('del-modal').style.display='none'"
+        style="background:#f0f2f7;color:#555;border:none;border-radius:7px;padding:8px 18px;font-size:12px;font-weight:600;cursor:pointer">Cancelar</button>
+      <button id="del-modal-btn"
+        style="background:#b92d2d;color:#fff;border:none;border-radius:7px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer">Excluir</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Gerenciar Prod. do Dia -->
+<div class="ger-modal-overlay" id="gerdia-modal" style="display:none">
+  <div class="ger-modal-box" style="width:640px;max-width:96vw">
+    <h2>📋 Gerenciar Produção do Dia</h2>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <label style="font-size:12px;color:#555">Agência:</label>
+      <select id="gd-agency" onchange="carregarProdDia()" style="padding:6px 10px;border:1px solid #d0d5e0;border-radius:6px;font-size:12px;min-width:160px">
+        <option value="">— Selecione —</option>
+        <option>Alphaville</option><option>Lapa</option><option>Osasco</option>
+        <option>Santana</option><option>Vila Maria</option><option>Sorocaba</option>
+        <option>Tatuape</option><option>Cidade Jardim</option><option>Santo Amaro</option>
+        <option>JK</option><option>Itaim</option><option>Sumaré</option>
+      </select>
+      <label style="font-size:12px;color:#555">Data:</label>
+      <input type="date" id="gd-date" onchange="carregarProdDia()" style="padding:6px 10px;border:1px solid #d0d5e0;border-radius:6px;font-size:12px">
+    </div>
+    <div id="gd-content" style="font-size:12px;color:#aaa;text-align:center;padding:16px">Selecione agência e data</div>
+    <div style="text-align:right;margin-top:14px">
+      <button class="btn-ger-close" onclick="fecharGerenciarDia()">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Gerenciar Gerentes -->
+<div class="ger-modal-overlay" id="ger-modal">
+  <div class="ger-modal-box">
+    <h2>👥 Gerenciar Gerentes</h2>
+    <table class="ger-table" id="ger-table">
+      <thead><tr><th>Agência</th><th>Gerente</th><th></th></tr></thead>
+      <tbody id="ger-tbody"></tbody>
+    </table>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <select id="ger-nova-ag" style="flex:1;padding:7px;border:1px solid #d0d5e0;border-radius:6px;font-size:12px">
+        <option value="">— Agência —</option>
+        <option>Alphaville</option><option>Lapa</option><option>Osasco</option>
+        <option>Santana</option><option>Vila Maria</option><option>Sorocaba</option>
+        <option>Tatuape</option><option>Cidade Jardim</option><option>Santo Amaro</option>
+        <option>JK</option><option>Itaim</option><option>Sumaré</option>
+      </select>
+      <input type="text" id="ger-novo-nome" placeholder="Nome do gerente" style="flex:2;padding:7px;border:1px solid #d0d5e0;border-radius:6px;font-size:12px;outline:none">
+      <button class="btn-ger-add" onclick="adicionarGerente()">+ Adicionar</button>
+    </div>
+    <div style="text-align:right">
+      <button class="btn-ger-close" onclick="fecharGerentes()">Fechar</button>
+    </div>
+  </div>
+</div>
+
+
+<script>
+  // ── Produtividade — Tabela de preenchimento por gerente ──
+  const PROD_KEY = 'lancamentos_prod_gerente';
+
+  function salvarProdGerente(payload) {
+    let store = JSON.parse(localStorage.getItem(PROD_KEY) || '[]');
+    store = store.filter(r => !(r.agency === payload.agency && r.gerente === payload.gerente && r.date === payload.date));
+    store.push(payload);
+    localStorage.setItem(PROD_KEY, JSON.stringify(store));
+  }
+
+  function carregarProdGerente(agency, date) {
+    return JSON.parse(localStorage.getItem(PROD_KEY) || '[]')
+      .filter(r => r.agency === agency && r.date === date);
+  }
+
+  function habilitarEdicaoGerente(rowId) {
+    // Habilita os inputs da linha para edição
+    ['pd-desc-','pd-ant-','pd-lp-','pd-liq-'].forEach(prefix => {
+      const el = document.getElementById(prefix + rowId);
+      if (el) {
+        el.removeAttribute('disabled');
+        el.style.background = '#fff9e6';
+        el.style.borderColor = '#e67e22';
+        el.focus();
+      }
+    });
+    // Marca linha como em edição
+    const tr = document.getElementById('prod-tr-' + rowId);
+    if (tr) tr.style.background = '#fff9e6';
+    showToast('✏️ Edite os valores e clique em Salvar.');
+  }
+
+  function calcProdRow(rowId) {
+    const desc = parseFloat(document.getElementById('pd-desc-'+rowId).value) || 0;
+    const ant  = parseFloat(document.getElementById('pd-ant-'+rowId)?.value)  || 0;
+    const lp   = parseFloat(document.getElementById('pd-lp-'+rowId)?.value)   || 0;
+    const liq  = parseFloat(document.getElementById('pd-liq-'+rowId)?.value)  || 0;
+    const pipe = desc + ant + lp;
+    const net  = pipe + liq;  // liq negativa
+    const pipeEl = document.getElementById('pd-pipe-'+rowId);
+    const netEl  = document.getElementById('pd-net-'+rowId);
+    if (pipeEl) pipeEl.textContent = fmtBRL(pipe);
+    if (netEl) {
+      netEl.textContent = fmtBRL(net);
+      netEl.className   = 'prod-calc ' + (net >= 0 ? 'pos' : 'neg');
+    }
+  }
+
+  // Salvar via classes gi-* — sem depender de IDs
+  window._salvarGer = function(btn) {
+    const tr      = btn.closest('tr');
+    const agency  = btn.getAttribute('data-agency');
+    const gerente = btn.getAttribute('data-gerente');
+    const date    = btn.getAttribute('data-date');
+    if (!date)   { showToast('⚠️ Selecione a data!', true); return; }
+    if (!agency) { showToast('⚠️ Agência não encontrada!', true); return; }
+    const desc = parseFloat(tr.querySelector('.gi-desc')?.value) || 0;
+    const ant  = parseFloat(tr.querySelector('.gi-ant')?.value)  || 0;
+    const lp   = parseFloat(tr.querySelector('.gi-lp')?.value)   || 0;
+    const liq  = parseFloat(tr.querySelector('.gi-liq')?.value)  || 0;
+    const pipe = desc + ant + lp;
+    const net  = pipe + liq;
+    const payload = { agency, gerente, date, prodDesconto: desc, antDemais: ant, longoPrazo: lp, liquidacaoTotal: liq, pipe, netProjetado: net };
+    salvarProdGerente(payload);
+    tr.className = 'prod-row-saved';
+    showToast('✅ ' + gerente + ' salvo!');
+    renderProdutividade();
+    renderGerentesAgencia();
+  };
+
+  function submitProdGerente(rowId, agency, gerente, date) {
+    // Fallback legado — tenta pelo rowId
+    const desc = parseFloat(document.getElementById('pd-desc-'+rowId)?.value) || 0;
+    const ant  = parseFloat(document.getElementById('pd-ant-'+rowId)?.value)  || 0;
+    const lp   = parseFloat(document.getElementById('pd-lp-'+rowId)?.value)   || 0;
+    const liq  = parseFloat(document.getElementById('pd-liq-'+rowId)?.value)  || 0;
+    const pipe = desc + ant + lp;
+    const net  = pipe + liq;
+    const payload = { agency, gerente, date, prodDesconto: desc, antDemais: ant, longoPrazo: lp, liquidacaoTotal: liq, pipe, netProjetado: net };
+    salvarProdGerente(payload);
+    showToast('✅ ' + gerente + ' salvo!');
+    renderProdutividade();
+    renderGerentesAgencia();
+  }
+
+  function limparProdGerente(rowId, agency, gerente, date) {
+    let store = JSON.parse(localStorage.getItem(PROD_KEY) || '[]');
+    store = store.filter(r => !(r.agency === agency && r.gerente === gerente && r.date === date));
+    localStorage.setItem(PROD_KEY, JSON.stringify(store));
+    // Limpa inputs
+    ['desc','ant','lp','liq'].forEach(f => {
+      const el = document.getElementById('pd-'+f+'-'+rowId);
+      if (el) el.value = '';
+    });
+    calcProdRow(rowId);
+    const tr = document.getElementById('prod-tr-'+rowId);
+    if (tr) tr.className = '';
+    showToast('🗑 Lançamento removido.');
+    renderProdutividade();
+  }
+
+  function renderGerentesAgencia(agParam) {
+    var agency = agParam || document.getElementById('prod-agency').value;
+    if (agParam) { var _pa=document.getElementById('prod-agency'); if(_pa) _pa.value=agParam; }
+    var date   = document.getElementById('prod-data').value;
+    var tbody  = document.getElementById('tbody-prod-input');
+
+    if (!agency) { tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#aaa;padding:16px">Selecione a agência</td></tr>'; return; }
+    if (!date)   { tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#aaa;padding:16px">Selecione a data</td></tr>'; return; }
+
+    var gerentes = gerentesDaAgencia(agency);
+    if (!gerentes.length) {
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#aaa;padding:16px">Nenhum gerente cadastrado. <button onclick="abrirGerentes()" class="btn btn-secondary btn-sm">👥 Cadastrar</button></td></tr>';
+      return;
+    }
+
+    var salvos = JSON.parse(localStorage.getItem(PROD_KEY) || '[]').filter(function(r){ return r.agency===agency && r.date===date; });
+    var salvoMap = {};
+    salvos.forEach(function(r){ salvoMap[r.gerente] = r; });
+
+    var mes = date.slice(0,7);
+    var vopAcum = {};
+    JSON.parse(localStorage.getItem(PROD_KEY)||'[]').filter(function(r){ return r.agency===agency && r.date && r.date.startsWith(mes); }).forEach(function(r){
+      if(!vopAcum[r.gerente]) vopAcum[r.gerente]=0;
+      vopAcum[r.gerente]+=(Number(r.prodDesconto)||0)+(Number(r.antDemais)||0)+(Number(r.longoPrazo)||0);
+    });
+
+    function qFlag(v) {
+      if(v>25000000) return '<span style="background:#1a3a6e;color:#fff;font-size:9px;padding:1px 6px;border-radius:10px;margin-left:4px">Q1</span>';
+      if(v>19000000) return '<span style="background:#0d7a5f;color:#fff;font-size:9px;padding:1px 6px;border-radius:10px;margin-left:4px">Q2</span>';
+      if(v>13000000) return '<span style="background:#e67e22;color:#fff;font-size:9px;padding:1px 6px;border-radius:10px;margin-left:4px">Q3</span>';
+      if(v>0)        return '<span style="background:#b92d2d;color:#fff;font-size:9px;padding:1px 6px;border-radius:10px;margin-left:4px">Q4</span>';
+      return '';
+    }
+
+    var rows = '';
+    gerentes.forEach(function(g) {
+      var s=salvoMap[g.nome], saved=!!s;
+      var desc=s?(s.prodDesconto||0):'', ant=s?(s.antDemais||0):'', lp=s?(s.longoPrazo||0):'', liq=s?(s.liquidacaoTotal||0):'';
+      var pipe=s?fmtBRL(s.pipe||0):'R$ 0', net=s?(s.netProjetado||0):0, nc=net>=0?'pos':'neg';
+      rows += '<tr '+(saved?'class="prod-row-saved"':'')+'>'+
+        '<td class="ag">'+g.nome+qFlag(vopAcum[g.nome]||0)+(saved?' ✅':'')+' </td>'+
+        '<td><input class="prod-input gi-desc" type="number" placeholder="0" value="'+desc+'" oninput="calcRowAuto(this)"></td>'+
+        '<td><input class="prod-input gi-ant"  type="number" placeholder="0" value="'+ant+'"  oninput="calcRowAuto(this)"></td>'+
+        '<td><input class="prod-input gi-lp"   type="number" placeholder="0" value="'+lp+'"   oninput="calcRowAuto(this)"></td>'+
+        '<td><input class="prod-input gi-liq"  type="number" placeholder="0" value="'+liq+'"  oninput="calcRowAuto(this)"></td>'+
+        '<td class="auto-val gi-pipe">'+pipe+'</td>'+
+        '<td class="prod-calc gi-net '+nc+'">'+(saved?fmtBRL(net):'R$ 0')+'</td>'+
+        '<td style="text-align:center;white-space:nowrap">'+
+          '<button class="btn-salvar-ger" data-agency="'+agency+'" data-gerente="'+g.nome+'" data-date="'+date+'" onclick="salvarGerenteProd(this)">Salvar</button> '+
+          '<button class="btn-gd-del" data-agency="'+agency+'" data-gerente="'+g.nome+'" data-date="'+date+'" onclick="removerGerente(this)" title="Excluir">🗑</button>'+
+        '</td>'+
+        '</tr>';
+    });
+
+    var hist = JSON.parse(localStorage.getItem(PROD_KEY)||'[]').filter(function(r){ return r.agency===agency && r.date && r.date.startsWith(mes) && r.date!==date; }).sort(function(a,b){ return b.date.localeCompare(a.date); });
+    if(hist.length) {
+      rows += '<tr><td colspan="9" style="padding:6px 9px;background:#f0f2f7;font-size:10px;color:#888;font-weight:600">📅 Histórico do mês</td></tr>';
+      hist.forEach(function(r) {
+        var p=(Number(r.prodDesconto)||0)+(Number(r.antDemais)||0)+(Number(r.longoPrazo)||0);
+        var n=p+(Number(r.liquidacaoTotal)||0), nc2=n>=0?'#0d7a5f':'#b92d2d';
+        var pt=r.date.split('-'); var dd=pt[2]+'/'+pt[1];
+        rows += '<tr style="background:#fafbfd;font-size:11px">'+
+          '<td class="ag" style="color:#555">'+r.gerente+' <small style="color:#aaa">'+dd+'</small></td>'+
+          '<td style="text-align:right"><span class="hval" style="color:#888">'+fmtBRL(r.prodDesconto||0)+'</span><input class="prod-input hinput" type="number" style="display:none;width:80px" value="'+(r.prodDesconto||0)+'" oninput="calcHistRowTr(this.closest(&quot;tr&quot;))"></td>'+
+          '<td style="text-align:right"><span class="hval" style="color:#888">'+fmtBRL(r.antDemais||0)+'</span><input class="prod-input hinput" type="number" style="display:none;width:80px" value="'+(r.antDemais||0)+'" oninput="calcHistRowTr(this.closest(&quot;tr&quot;))"></td>'+
+          '<td style="text-align:right"><span class="hval" style="color:#888">'+fmtBRL(r.longoPrazo||0)+'</span><input class="prod-input hinput" type="number" style="display:none;width:80px" value="'+(r.longoPrazo||0)+'" oninput="calcHistRowTr(this.closest(&quot;tr&quot;))"></td>'+
+          '<td style="text-align:right"><span class="hval" style="color:#888">'+fmtBRL(r.liquidacaoTotal||0)+'</span><input class="prod-input hinput" type="number" style="display:none;width:80px" value="'+(r.liquidacaoTotal||0)+'" oninput="calcHistRowTr(this.closest(&quot;tr&quot;))"></td>'+
+          '<td class="auto-val hpipe">'+fmtBRL(p)+'</td>'+
+          '<td class="hnet '+(n>=0?'pos':'neg')+'">'+fmtBRL(n)+'</td>'+
+          '<td style="white-space:nowrap">'+
+            '<button class="btn-salvar-ger hbtn-edit" style="background:#e67e22;font-size:10px;padding:3px 8px" data-agency="'+agency+'" data-gerente="'+r.gerente+'" data-date="'+r.date+'" onclick="editarHistLinha(this)">✏️</button>'+
+            '<button class="btn-salvar-ger hbtn-save" style="display:none;font-size:10px;padding:3px 8px" data-agency="'+agency+'" data-gerente="'+r.gerente+'" data-date="'+r.date+'" onclick="salvarHistLinha(this)">✔</button>'+
+          '</td>'+
+          '<td><button class="btn-gd-del" data-agency="'+agency+'" data-gerente="'+r.gerente+'" data-date="'+r.date+'" onclick="removerGerente(this)">🗑</button></td>'+
+          '</tr>';
+      });
+    }
+    tbody.innerHTML = rows;
+  }
+
+  // ── Produtividade ───────────────────────────────────────
+  function renderProdutividade() {
+    const mes   = document.getElementById('prod-mes').value;
+    if (!mes) return;
+    // Exige agência selecionada
+    const _agFil = document.getElementById('diario-filtro-ag') ? document.getElementById('diario-filtro-ag').value : '';
+    if (!_agFil) {
+      const _g = document.getElementById('prod-pipe-grid');
+      if (_g) _g.innerHTML = '<div style="color:#aaa;font-size:11px;padding:12px;text-align:center">Selecione a agência para ver</div>';
+      const _t = document.getElementById('prod-total');
+      if (_t) _t.style.display = 'none';
+      return;
+    }
+    // agFil = _agFil (já declarado acima)
+    const agFil = (document.getElementById('prod-agency')||{value:''}).value;
+    const prodStore = JSON.parse(localStorage.getItem(PROD_KEY)  || '[]');
+    const diarStore = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+    let prodMes   = prodStore.filter(r => r.date && r.date.startsWith(mes) && (!agFil || r.agency === agFil));
+    let diarMes   = diarStore.filter(r => r.date && r.date.startsWith(mes) && (!agFil || r.agency === agFil));
+
+    // Calcula pipe = desc+ant+lp
+    const calcPipe = r => (Number(r.prodDesconto)||0)+(Number(r.antDemais)||0)+(Number(r.longoPrazo)||0);
+
+    // Agrupa por GERENTE — soma TODOS os dias do mês (acumulado)
+    const byGer       = {};
+    const seenProd    = {};
+    const seenGerDate = {};
+
+    const addItem = (agency, ger, pipe, liq, date, fonte) => {
+      const dk = fonte + '||' + date + '||' + agency + '||' + ger;
+      if (seenProd[dk]) return;
+      seenProd[dk] = true;
+      if (!byGer[ger]) byGer[ger] = { gerente: ger, empresa: agency, pipe: 0, liq: 0, dias: [] };
+      byGer[ger].pipe += Number(pipe)||0;
+      byGer[ger].liq  += Number(liq)||0;
+      byGer[ger].dias.push(date);
+    };
+
+    // PROD_KEY — aba Produtividade (prioridade)
+    prodMes.forEach(r => {
+      const ger  = r.gerente || r.agency;
+      const pipe = calcPipe(r) || Number(r.pipe)||0;
+      addItem(r.agency, ger, pipe, Number(r.liquidacaoTotal)||0, r.date, 'prod');
+      seenGerDate[r.date + '||' + r.agency + '||' + ger] = true;
+    });
+
+    // STORE_KEY — só se não há no PROD_KEY para mesmo dia
+    diarMes.forEach(r => {
+      const ger = r.gerente;
+      if (!ger || ger === r.agency) return;
+      if (seenGerDate[r.date + '||' + r.agency + '||' + ger]) return;
+      addItem(r.agency, ger, calcPipe(r), Number(r.liquidacaoTotal)||0, r.date, 'diar');
+    });
+
+    const items = Object.values(byGer).map(g => ({
+      ...g,
+      netProj:   g.pipe + g.liq,
+      diasCount: [...new Set(g.dias)].length
+    }));
+
+    if (!items.length) {
+      document.getElementById('prod-pipe-grid').innerHTML = '<div style="color:#aaa;font-size:11px;padding:8px">Sem dados para este mês</div>';
+      if(document.getElementById('tbody-prod')) document.getElementById('tbody-prod').innerHTML = '<tr><td colspan="6" style="text-align:center;color:#aaa;padding:14px">Sem dados</td></tr>';
+      document.getElementById('prod-total').style.display = 'none';
+      return;
+    }
+
+    // Ordena decrescente por pipe
+    items.sort((a,b) => b.pipe - a.pipe);
+
+    // Totalizador
+    const totPipe = items.reduce((s,i) => s + i.pipe, 0);
+    const totLiq  = items.reduce((s,i) => s + i.liq,  0);
+    const totNet  = items.reduce((s,i) => s + i.netProj, 0);
+
+    const totEl = document.getElementById('prod-total');
+    totEl.style.display = 'flex';
+    document.getElementById('prod-pipe-total').textContent = fmtBRL(totPipe);
+    document.getElementById('prod-liq-total').textContent  = fmtBRL(totLiq);
+    // net-total removido — mostrado no mini-dash por agência
+    document.getElementById('prod-ag-count').textContent = items.length;
+    const totalDias = items.reduce((s,i) => s + (i.diasCount||0), 0);
+    const diasEl = document.getElementById('prod-dias-count');
+    if (diasEl) diasEl.textContent = totalDias;
+
+    // Cards de produção por gerente
+    document.getElementById('prod-pipe-grid').innerHTML = items.map(item => {
+      // Flag de quartil baseado no VOP acumulado
+      const v    = Math.abs(item.pipe);
+      const q    = v > 25000000 ? 1 : v > 19000000 ? 2 : v > 13000000 ? 3 : 4;
+      const qCor = ['','#1a3a6e','#0d7a5f','#e67e22','#b92d2d'][q];
+      const qLbl = ['','Q1','Q2','Q3','Q4'][q];
+      // Relógio mini para o card
+      const _metaGer = 25000000; // referência Q1
+      const _pctGer  = Math.min(Math.round((item.pipe / _metaGer) * 100), 999);
+      return `<div class="pipe-card" style="border-top:3px solid ${qCor}">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <div class="pc-gerente" title="${item.gerente}" style="font-weight:700;color:#1a3a6e">${item.gerente}</div>
+          <span style="background:${qCor};color:#fff;font-size:9px;font-weight:700;padding:1px 7px;border-radius:20px">${qLbl}</span>
+        </div>
+        <div class="pc-valor" style="color:${qCor}">${fmtBRL(item.pipe)}</div>
+        <div style="font-size:9px;color:#888;margin-top:2px">Net: ${fmtBRL(item.netProj)}</div>
+        <div style="background:#f0f2f7;border-radius:4px;height:4px;margin-top:6px;overflow:hidden">
+          <div style="background:${qCor};height:4px;width:${Math.min(_pctGer,100)}%;border-radius:4px;transition:width 0.5s"></div>
+        </div>
+        <div style="font-size:8px;color:#aaa;margin-top:2px">${_pctGer}% da ref. Q1 (25M)</div>
+      </div>`;
+    }).join('');
+
+    // Tabela detalhada
+    window._delItems = items.map(i => ({ empresa: i.empresa, gerente: i.gerente, mes: mes }));
+
+    const _tbProd = document.getElementById('tbody-prod');
+    if (_tbProd) _tbProd.innerHTML = items.map((item, idx) => {
+      const nc = item.netProj >= 0 ? 'pos' : 'neg';
+      return `<tr>
+        <td class="ag">${item.gerente}</td>
+        <td class="auto-val" style="text-align:right;font-weight:700">${fmtBRL(item.pipe)}</td>
+        <td style="text-align:right">${fmtBRL(item.liq)}</td>
+        <td class="${nc}" style="text-align:right;font-weight:700">${fmtBRL(item.netProj)}</td>
+        <td style="text-align:center;font-size:11px;color:#888">${item.diasCount||0}d</td>
+        <td style="text-align:center">
+          <button class="btn-salvar-ger" onclick="editarProdGerente(${idx})"
+            title="Editar produção de ${item.gerente}" style="background:#1a3a6e">✏️ Editar</button>
+        </td>
+      </tr>`;
+    }).join('');
+
+    // Event delegation para excluir
+    const tbodProd = document.getElementById('tbody-prod');
+    if (tbodProd) {
+      tbodProd.onclick = function(e) {
+        const btn = e.target.closest('.btn-del-ger');
+        if (!btn) return;
+        limparGerMes(btn.getAttribute('data-agency'), btn.getAttribute('data-gerente'), btn.getAttribute('data-mes'));
+      };
+    }
+  }
+
+
+  // Exclusão sincronizada — remove do PROD_KEY e STORE_KEY
+  function excluirSincronizado(agency, date, gerente) {
+    // Remove do PROD_KEY (por gerente)
+    let prodStore = JSON.parse(localStorage.getItem(PROD_KEY) || '[]');
+    prodStore = prodStore.filter(function(r) {
+      if (r.agency !== agency) return true;
+      if (date && r.date !== date) return true;
+      if (gerente && r.gerente !== gerente) return true;
+      return false;
+    });
+    localStorage.setItem(PROD_KEY, JSON.stringify(prodStore));
+
+    // Remove do STORE_KEY (por agência/dia)
+    let diarStore = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+    diarStore = diarStore.filter(function(r) {
+      if (r.agency !== agency) return true;
+      if (date && r.date !== date) return true;
+      return false;
+    });
+    localStorage.setItem(STORE_KEY, JSON.stringify(diarStore));
+  }
+
+  function limparGerMes(agency, gerente, mes) {
+    let prodStore = JSON.parse(localStorage.getItem(PROD_KEY) || '[]');
+    prodStore = prodStore.filter(r => !(r.agency === agency && r.gerente === gerente && r.date && r.date.startsWith(mes)));
+    localStorage.setItem(PROD_KEY, JSON.stringify(prodStore));
+    // Também remove STORE_KEY do mesmo período
+    let diarStore = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+    diarStore = diarStore.filter(r => !(r.agency === agency && r.date && r.date.startsWith(mes)));
+    localStorage.setItem(STORE_KEY, JSON.stringify(diarStore));
+    showToast('🗑 Lançamentos de ' + gerente + ' removidos!');
+    renderProdutividade();
+    const agSel = document.getElementById('prod-agency');
+    if (agSel && agSel.value === agency) renderGerentesAgencia();
+  }
+
+  // Função global acessível pelo onclick do HTML dinâmico
+  window._limparGer = function(btn) {
+    const agency  = btn.dataset ? btn.dataset.agency  : btn.getAttribute('data-agency');
+    const gerente = btn.dataset ? btn.dataset.gerente : btn.getAttribute('data-gerente');
+    const mes     = btn.dataset ? btn.dataset.mes     : btn.getAttribute('data-mes');
+    if (!agency || !gerente || !mes) {
+      showToast('⚠️ Erro ao ler dados do botão.', true);
+      return;
+    }
+    limparGerMes(agency, gerente, mes);
+  };
+
+  // Também expor limparGerMes globalmente
+  window.limparGerMes = limparGerMes;
+
+  function sincronizarAgencia(ag) {
+    const prodAg = document.getElementById('prod-agency');
+    if (prodAg) prodAg.value = ag || '';
+    const tbody = document.getElementById('tbody-prod-input');
+    if (!ag) {
+      if (tbody) tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#aaa;padding:16px">Selecione uma agência acima</td></tr>';
+      const div = document.getElementById('mini-dash-netproj');
+      if (div) div.innerHTML = '';
+      return;
+    }
+    // setTimeout garante que prod-agency.value já foi atualizado no DOM
+    setTimeout(function() {
+      renderGerentesAgencia(ag);
+      renderMiniDashNetProj();
+      renderProdutividade();
+    }, 10);
+  }
+
+  function abrirEdicaoDiario(idx) {
+    const r = window._diarioRows && window._diarioRows[idx];
+    if (!r) return;
+    const modal = document.getElementById('del-modal');
+    const msg   = document.getElementById('del-modal-msg');
+    const btn   = document.getElementById('del-modal-btn');
+    const [y,m,d] = r.date.split('-');
+    msg.innerHTML =
+      '<div style="font-size:12px;font-weight:700;color:#1a3a6e;margin-bottom:10px">✏️ Editar ' + r.agency + ' — ' + d+'/'+m+'/'+y + '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">' +
+        '<label>Prod. Desc.</label><input id="ed-d-desc" type="number" value="' + r.desc + '" style="padding:4px 8px;border:1px solid #d0d5e0;border-radius:5px">' +
+        '<label>Ant/Demais</label><input id="ed-d-ant"  type="number" value="' + r.ant  + '" style="padding:4px 8px;border:1px solid #d0d5e0;border-radius:5px">' +
+        '<label>Longo Prazo</label><input id="ed-d-lp"  type="number" value="' + r.lp   + '" style="padding:4px 8px;border:1px solid #d0d5e0;border-radius:5px">' +
+        '<label>Liquidação</label><input id="ed-d-liq"  type="number" value="' + r.liq  + '" style="padding:4px 8px;border:1px solid #d0d5e0;border-radius:5px">' +
+      '</div>';
+    btn.textContent = '✔ Salvar';
+    btn.style.background = '#1a3a6e';
+    btn.onclick = function() {
+      var desc = parseFloat(document.getElementById('ed-d-desc').value)||0;
+      var ant  = parseFloat(document.getElementById('ed-d-ant').value) ||0;
+      var lp   = parseFloat(document.getElementById('ed-d-lp').value)  ||0;
+      var liq  = parseFloat(document.getElementById('ed-d-liq').value) ||0;
+      var pipe = desc + ant + lp;
+      var net  = pipe + liq;
+      // Atualiza no STORE_KEY
+      var store = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+      var si = store.findIndex(function(x){ return x.agency===r.agency && x.date===r.date; });
+      if (si >= 0) {
+        store[si].prodDesconto    = desc;
+        store[si].antDemais       = ant;
+        store[si].longoPrazo      = lp;
+        store[si].liquidacaoTotal = liq;
+        store[si].vopDia          = pipe;
+        store[si].netDia          = net;
+        localStorage.setItem(STORE_KEY, JSON.stringify(store));
+      }
+      // Atualiza também no PROD_KEY os gerentes do mesmo dia/agência
+      var prodStore = JSON.parse(localStorage.getItem(PROD_KEY) || '[]');
+      var updated = false;
+      prodStore.forEach(function(pr) {
+        if (pr.agency === r.agency && pr.date === r.date) {
+          // Redistribui proporcionalmente se houver múltiplos gerentes
+          updated = true;
+        }
+      });
+      if (updated) localStorage.setItem(PROD_KEY, JSON.stringify(prodStore));
+      modal.style.display = 'none';
+      btn.textContent = 'Excluir';
+      btn.style.background = '';
+      showToast('✅ ' + r.agency + ' — ' + d+'/'+m+'/'+y + ' atualizado!');
+      };
+    modal.style.display = 'flex';
+  }
+
+  function renderDiario() {
+    const mes   = document.getElementById('diario-mes').value;
+    const dia   = document.getElementById('diario-dia') ? document.getElementById('diario-dia').value : '';
+    const agFil = document.getElementById('diario-filtro-ag').value;
+    const tbody = document.getElementById('tbody-diario-prod');
+
+    // Exige agência selecionada
+    if (!agFil) {
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#aaa;padding:20px">Selecione uma agência para ver o histórico</td></tr>';
+      return;
+    }
+    if (!mes && !dia) {
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#aaa;padding:14px">Selecione o mês ou um dia específico</td></tr>';
+      return;
+    }
+
+    // Apenas STORE_KEY — lançamentos da aba Lançar Produção por agência
+    const diarStore = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+
+    const filtroData = r => dia ? r.date === dia : (mes ? r.date && r.date.startsWith(mes) : true);
+    let diarRows = diarStore.filter(r => filtroData(r));
+    if (agFil) diarRows = diarRows.filter(r => r.agency === agFil);
+
+    // Um registro por data+agência (sem somar gerentes)
+    const byKey = {};
+    // Carrega saldos mensais para calcular Net Projetado Mês
+    const saldosMes = JSON.parse(localStorage.getItem(SALDOS_KEY) || '{}');
+
+    diarRows.forEach(r => {
+      const key = r.date + '||' + r.agency;
+      if (!byKey[key]) {
+        const pipe    = (Number(r.prodDesconto)||0)+(Number(r.antDemais)||0)+(Number(r.longoPrazo)||0);
+        const net     = Number(r.netDia)||(pipe+(Number(r.liquidacaoTotal)||0));
+        // Net Proj Mês = net acumulado + saldo desc + saldo arv + quente
+        const sAg     = saldosMes[r.agency] || {};
+        const saldoDesc  = (Number(sAg.descInicial)||0)  - (Number(r.prodDesconto)||0);
+        const saldoArv   = (Number(sAg.arvInicial)||0)   - (Number(r.antDemais)||0);
+        const saldoQ     = Number(sAg.quenteInicial)||0;
+        const netAcum    = (Number(sAg.netAcumulado)||0) + net;
+        const netProjMes = netAcum + saldoDesc + saldoArv + saldoQ;
+        byKey[key] = {
+          date: r.date, agency: r.agency,
+          gerente: r.gerente || '—',
+          desc: Number(r.prodDesconto)||0,
+          ant:  Number(r.antDemais)||0,
+          lp:   Number(r.longoPrazo)||0,
+          liq:  Number(r.liquidacaoTotal)||0,
+          pipe, net,
+          netProjMes: Number(r.netProjMes) || 0
+        };
+      }
+    });
+
+    const allRows = Object.values(byKey);
+
+    if (!allRows.length) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#aaa;padding:14px">Nenhum lançamento encontrado</td></tr>';
+      return;
+    }
+
+    // Ordena: data desc → agência → gerente
+    allRows.sort((a,b) => b.date.localeCompare(a.date) || a.agency.localeCompare(b.agency) || a.gerente.localeCompare(b.gerente));
+
+    const totPipe = allRows.reduce((s,r) => s + r.pipe, 0);
+    const totNet  = allRows.reduce((s,r) => s + r.net,  0);
+
+    // Salva em global para edição
+    window._diarioRows = allRows;
+
+    tbody.innerHTML = allRows.map((r, idx) => {
+      const [y,m,d] = r.date.split('-');
+      const nc = r.net >= 0 ? 'pos' : 'neg';
+      return `<tr id="diario-tr-${idx}">
+        <td class="ag" style="white-space:nowrap">${d}/${m}/${y}</td>
+        <td style="font-weight:600;color:#1a3a6e">${r.agency}</td>
+        <td style="text-align:right" id="dd-desc-${idx}">${fmtBRL(r.desc)}</td>
+        <td style="text-align:right" id="dd-ant-${idx}">${fmtBRL(r.ant)}</td>
+        <td style="text-align:right" id="dd-lp-${idx}">${fmtBRL(r.lp)}</td>
+        <td style="text-align:right;color:${r.liq < 0 ? '#b92d2d' : '#555'}" id="dd-liq-${idx}">${fmtBRL(r.liq)}</td>
+        <td class="auto-val" style="text-align:right" id="dd-pipe-${idx}">${fmtBRL(r.pipe)}</td>
+        <td class="${nc}" style="text-align:right" id="dd-net-${idx}">${fmtBRL(r.net)}</td>
+        <td class="${(r.netProjMes||0) >= 0 ? 'pos' : 'neg'}" style="text-align:right" id="dd-np-${idx}">${fmtBRL(r.netProjMes||0)}</td>
+        <td style="text-align:center;white-space:nowrap">
+          <button class="btn-salvar-ger" style="background:#e67e22;font-size:10px;padding:3px 8px" onclick="abrirEdicaoDiario(${idx})">✏️</button>
+        </td>
+      </tr>`;
+    }).join('') + `<tr style="background:#1a3a6e;color:#fff;font-weight:700">
+      <td colspan="6" style="text-align:right;color:#fff;padding:6px 9px">TOTAL</td>
+      <td style="text-align:right;color:#fff;padding:6px 9px">${fmtBRL(totPipe)}</td>
+      <td style="text-align:right;color:${totNet>=0?'#90ee90':'#ff9999'};padding:6px 9px">${fmtBRL(totNet)}</td>
+      <td></td><td></td>
+    </tr>`;
+  }
+
+  function abrirEdicaoDia() {
+    const dia = document.getElementById('prod-dia-limpar').value;
+    if (!dia) { showToast('⚠️ Selecione um dia para editar.', true); return; }
+    const card = document.getElementById('card-edicao-dia');
+    card.style.display = 'block';
+    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    renderEdicaoDia(dia);
+  }
+
+  function fecharEdicaoDia() {
+    document.getElementById('card-edicao-dia').style.display = 'none';
+  }
+
+  function renderEdicaoDia(dia) {
+    const cont = document.getElementById('edicao-dia-content');
+    const [y,m,d] = dia.split('-');
+
+    // Lê lançamentos do PROD_KEY do dia
+    const prodStore = JSON.parse(localStorage.getItem(PROD_KEY) || '[]');
+    const rows = prodStore.filter(r => r.date === dia);
+
+    if (!rows.length) {
+      cont.innerHTML = '<div style="color:#aaa;font-size:12px;text-align:center;padding:16px">Nenhum lançamento em ' + d+'/'+m+'/'+y + '</div>';
+      return;
+    }
+
+    cont.innerHTML = `
+      <div style="font-size:11px;color:#1a3a6e;font-weight:600;margin-bottom:10px">📅 ${d}/${m}/${y}</div>
+      <div class="tbl-wrap">
+      <table class="gd-table">
+        <thead><tr>
+          <th>Agência</th>
+          <th>Gerente</th>
+          <th style="text-align:right">Prod.Desc</th>
+          <th style="text-align:right">Ant/Demais</th>
+          <th style="text-align:right">Longo Prazo</th>
+          <th style="text-align:right">Liquidação</th>
+          <th style="text-align:right">VOP ⚡</th>
+          <th style="text-align:right">Net ⚡</th>
+          <th>Ação</th>
+        </tr></thead>
+        <tbody>
+          ${rows.map((r, i) => {
+            const pipe = (Number(r.prodDesconto)||0)+(Number(r.antDemais)||0)+(Number(r.longoPrazo)||0);
+            const net  = pipe + (Number(r.liquidacaoTotal)||0);
+            const nc   = net >= 0 ? '#0d7a5f' : '#b92d2d';
+            return `<tr id="edit-row-${i}">
+              <td style="font-weight:600;color:#1a3a6e">${r.agency}</td>
+              <td style="font-weight:600">${r.gerente||'—'}</td>
+              <td><input class="gd-table input" id="ed-desc-${i}" type="number" value="${r.prodDesconto||0}" oninput="calcEdRow(${i})"></td>
+              <td><input class="gd-table input" id="ed-ant-${i}"  type="number" value="${r.antDemais||0}"   oninput="calcEdRow(${i})"></td>
+              <td><input class="gd-table input" id="ed-lp-${i}"   type="number" value="${r.longoPrazo||0}"  oninput="calcEdRow(${i})"></td>
+              <td><input class="gd-table input" id="ed-liq-${i}"  type="number" value="${r.liquidacaoTotal||0}" oninput="calcEdRow(${i})"></td>
+              <td id="ed-vop-${i}" style="text-align:right;font-weight:700;color:#185FA5">${fmtBRL(pipe)}</td>
+              <td id="ed-net-${i}" style="text-align:right;font-weight:700;color:${nc}">${fmtBRL(net)}</td>
+              <td style="white-space:nowrap">
+                <button class="btn-gd-save" onclick="salvarEdicaoGerDia(${i},'${dia}','${r.agency}','${r.gerente||''}')">✔ Salvar</button>
+                <button class="btn-gd-del"  onclick="excluirLancGerDia('${dia}','${r.agency}','${r.gerente||''}')">🗑</button>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+      </div>`;
+  }
+
+  function calcEdRow(i) {
+    const desc = parseFloat(document.getElementById('ed-desc-'+i).value)||0;
+    const ant  = parseFloat(document.getElementById('ed-ant-'+i).value) ||0;
+    const lp   = parseFloat(document.getElementById('ed-lp-'+i).value)  ||0;
+    const liq  = parseFloat(document.getElementById('ed-liq-'+i).value) ||0;
+    const pipe = desc + ant + lp;
+    const net  = pipe + liq;
+    const vEl  = document.getElementById('ed-vop-'+i);
+    const nEl  = document.getElementById('ed-net-'+i);
+    if (vEl) vEl.textContent = fmtBRL(pipe);
+    if (nEl) { nEl.textContent = fmtBRL(net); nEl.style.color = net >= 0 ? '#0d7a5f' : '#b92d2d'; }
+  }
+
+  function salvarEdicaoGerDia(i, dia, agency, gerente) {
+    const desc = parseFloat(document.getElementById('ed-desc-'+i).value)||0;
+    const ant  = parseFloat(document.getElementById('ed-ant-'+i).value) ||0;
+    const lp   = parseFloat(document.getElementById('ed-lp-'+i).value)  ||0;
+    const liq  = parseFloat(document.getElementById('ed-liq-'+i).value) ||0;
+    const pipe = desc + ant + lp;
+    const net  = pipe + liq;
+
+    let store = JSON.parse(localStorage.getItem(PROD_KEY) || '[]');
+    const idx = store.findIndex(r => r.date === dia && r.agency === agency && (r.gerente||'') === gerente);
+    if (idx >= 0) {
+      store[idx] = { ...store[idx], prodDesconto: desc, antDemais: ant, longoPrazo: lp, liquidacaoTotal: liq, pipe, netProjetado: net };
+      localStorage.setItem(PROD_KEY, JSON.stringify(store));
+      showToast('✅ Lançamento de ' + (gerente||agency) + ' atualizado!');
+      renderProdutividade();
+    } else {
+      showToast('⚠️ Registro não encontrado.', true);
+    }
+  }
+
+  function excluirLancGerDia(dia, agency, gerente) {
+    const modal = document.getElementById('del-modal');
+    const msg   = document.getElementById('del-modal-msg');
+    const btn   = document.getElementById('del-modal-btn');
+    msg.innerHTML = 'Excluir lançamento de <strong>' + (gerente||agency) + '</strong> em ' + dia + '?<br><small style="color:#888">Remove da produção diária e do lançamento por gerente.</small>';
+    btn.onclick = function() {
+      modal.style.display = 'none';
+      excluirSincronizado(agency, dia, gerente);
+      showToast('🗑 Removido de ambas as abas!');
+      renderEdicaoDia(dia);
+      renderProdutividade();
+      };
+    modal.style.display = 'flex';
+  }
+
+  function limparTodosGerente(gerente) {
+    if (!gerente) { showToast('⚠️ Informe o nome do gerente.', true); return; }
+    const modal = document.getElementById('del-modal');
+    const msg   = document.getElementById('del-modal-msg');
+    const btn   = document.getElementById('del-modal-btn');
+    msg.innerHTML = 'Deseja apagar <strong>TODOS</strong> os lançamentos de:<br><br>' +
+      '👤 <strong>' + gerente + '</strong><br><br>' +
+      '<span style="color:#b92d2d;font-size:11px">Remove de TODOS os meses e todas as abas.</span>';
+    btn.onclick = function() {
+      modal.style.display = 'none';
+      // Remove do PROD_KEY
+      let prodStore = JSON.parse(localStorage.getItem(PROD_KEY) || '[]');
+      const antProd = prodStore.length;
+      prodStore = prodStore.filter(r => (r.gerente||'').toLowerCase() !== gerente.toLowerCase());
+      localStorage.setItem(PROD_KEY, JSON.stringify(prodStore));
+      // Remove do STORE_KEY
+      let diarStore = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+      const antDiar = diarStore.length;
+      diarStore = diarStore.filter(r => (r.gerente||'').toLowerCase() !== gerente.toLowerCase());
+      localStorage.setItem(STORE_KEY, JSON.stringify(diarStore));
+      const removidos = (antProd - prodStore.length) + (antDiar - diarStore.length);
+      showToast('🗑 ' + removidos + ' lançamento(s) de ' + gerente + ' removidos!');
+      renderProdutividade();
+      };
+    modal.style.display = 'flex';
+  }
+
+  function limparProdMes() {
+    const mes = document.getElementById('prod-mes').value;
+    const dia = document.getElementById('prod-dia-limpar') ? document.getElementById('prod-dia-limpar').value : '';
+
+    if (!mes && !dia) { showToast('⚠️ Selecione o mês ou um dia.', true); return; }
+
+    const modal = document.getElementById('del-modal');
+    const msg   = document.getElementById('del-modal-msg');
+    const btn   = document.getElementById('del-modal-btn');
+
+    let label = '';
+    if (dia) {
+      const [y,m,d] = dia.split('-');
+      label = 'dia <strong>' + d + '/' + m + '/' + y + '</strong>';
+    } else {
+      const [y,m] = mes.split('-');
+      label = 'mês <strong>' + m + '/' + y + '</strong>';
+    }
+
+    msg.innerHTML = 'Apagar TODOS os lançamentos do ' + label + '?<br><br>' +
+      '<span style="color:#b92d2d;font-size:11px">Inclui produção diária e aba Produtividade.</span>';
+
+    btn.onclick = function() {
+      modal.style.display = 'none';
+      const filtro = r => dia ? r.date === dia : (mes ? r.date && r.date.startsWith(mes) : false);
+
+      let store = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+      store = store.filter(r => !filtro(r));
+      localStorage.setItem(STORE_KEY, JSON.stringify(store));
+
+      let prodStore = JSON.parse(localStorage.getItem(PROD_KEY) || '[]');
+      prodStore = prodStore.filter(r => !filtro(r));
+      localStorage.setItem(PROD_KEY, JSON.stringify(prodStore));
+
+      showToast('🗑 Dados apagados!');
+      renderProdutividade();
+        const agSel = document.getElementById('prod-agency');
+      if (agSel && agSel.value) renderGerentesAgencia();
+    };
+    modal.style.display = 'flex';
+  }
+
+  // ── Gerentes ────────────────────────────────────────────
+  function carregarGerentes() {
+    return JSON.parse(localStorage.getItem(GER_KEY) || '[]');
+  }
+  function salvarGerentes(lista) {
+    localStorage.setItem(GER_KEY, JSON.stringify(lista));
+  }
+  function gerentesDaAgencia(ag) {
+    return carregarGerentes().filter(g => g.agencia === ag);
+  }
+
+  function abrirGerentes() {
+    renderGerTable();
+    document.getElementById('ger-modal').style.display = 'flex';
+  }
+  function fecharGerentes() {
+    document.getElementById('ger-modal').style.display = 'none';
+    atualizarSelectGerente();
+    syncNomes(); // atualiza datalist também
+  }
+  function renderGerTable() {
+    const lista = carregarGerentes();
+    const tbody = document.getElementById('ger-tbody');
+    if (!lista.length) {
+      tbody.innerHTML = '<tr><td colspan="3" style="color:#aaa;text-align:center;padding:10px">Nenhum gerente cadastrado</td></tr>';
+      return;
+    }
+    tbody.innerHTML = lista.map((g,i) => `<tr>
+      <td>${g.agencia}</td>
+      <td><input type="text" value="${g.nome}" onchange="editarGerente(${i}, this.value)"></td>
+      <td><button class="btn-ger-del" onclick="excluirGerente(${i})">×</button></td>
+    </tr>`).join('');
+  }
+  function adicionarGerente() {
+    const ag   = document.getElementById('ger-nova-ag').value;
+    const nome = document.getElementById('ger-novo-nome').value.trim();
+    if (!ag || !nome) { showToast('⚠️ Informe agência e nome do gerente.', true); return; }
+    const lista = carregarGerentes();
+    lista.push({ agencia: ag, nome });
+    salvarGerentes(lista);
+    document.getElementById('ger-nova-ag').value   = '';
+    document.getElementById('ger-novo-nome').value = '';
+    renderGerTable();
+    showToast('✅ Gerente adicionado!');
+  }
+  function editarGerente(idx, nome) {
+    const lista = carregarGerentes();
+    if (lista[idx]) { lista[idx].nome = nome; salvarGerentes(lista); }
+  }
+  function excluirGerente(idx) {
+    if (!confirm('Excluir este gerente?')) return;
+    const lista = carregarGerentes();
+    lista.splice(idx, 1);
+    salvarGerentes(lista);
+    renderGerTable();
+  }
+  function atualizarSelectGerente() {
+    const ag  = (document.getElementById('gg-agency')||{value:''}).value;
+    const sel = document.getElementById('gg-gerente');
+    sel.innerHTML = '<option value="">— Selecione —</option>';
+    if (!ag) return;
+    gerentesDaAgencia(ag).forEach(g => {
+      const o = document.createElement('option');
+      o.value = g.nome; o.textContent = g.nome;
+      sel.appendChild(o);
+    });
+  }
+  function onGGAgency() { atualizarSelectGerente(); carregarGGResumo(); }
+
+  // ── GG Lançamentos ───────────────────────────────────────
+  function carregarGGDia(date) {
+    return JSON.parse(localStorage.getItem(GG_KEY) || '[]').filter(r => r.date === date);
+  }
+  function salvarGGLocal(payload) {
+    let store = JSON.parse(localStorage.getItem(GG_KEY) || '[]');
+    store = store.filter(r => !(r.agency === payload.agency && r.gerente === payload.gerente && r.date === payload.date));
+    store.push(payload);
+    localStorage.setItem(GG_KEY, JSON.stringify(store));
+  }
+
+  function calcGG() {
+    const contasEl = document.getElementById('gg-contas'); const contas = contasEl ? (parseInt(contasEl.value)||0) : 0;
+    const agend  = parseInt((document.getElementById('gg-agend')||{value:''}).value)  || 0;
+    const pctC   = Math.round((contas / META_DIARIA) * 100);
+    const pctA   = Math.round((agend  / META_DIARIA) * 100);
+    const elC = document.getElementById('gg-contas-pct'); if(!elC) return;
+    const elA = document.getElementById('gg-agend-pct');
+    const cls = p => p >= 100 ? 'pct-badge pct-ok' : p >= 60 ? 'pct-badge pct-low' : 'pct-badge pct-zero';
+    elC.textContent = pctC + '%'; elC.className = cls(pctC);
+    elA.textContent = pctA + '%'; elA.className = cls(pctA);
+  }
+
+  function submitGG() {
+    const agency  = (document.getElementById('gg-agency')||{value:''}).value;
+    const gerente = (document.getElementById('gg-gerente')||{value:''}).value;
+    const date    = (document.getElementById('gg-date')||{value:''}).value;
+    const contas  = parseInt((document.getElementById('gg-contas')||{value:''}).value) || 0;
+    const agend   = parseInt((document.getElementById('gg-agend')||{value:''}).value)  || 0;
+    if (!agency)  { showToast('⚠️ Selecione a agência!', true); return; }
+    if (!gerente) { showToast('⚠️ Selecione o gerente!', true); return; }
+    if (!date)    { showToast('⚠️ Informe a data!', true); return; }
+    const payload = { agency, gerente, date, contas, agend };
+    salvarGGLocal(payload);
+    showToast('✅ Lançamento salvo!');
+    clearGG();
+    renderRetorno(date);     // atualiza cards imediatamente
+    carregarGGResumo();      // atualiza tabela resumo
+    // Atualiza painel se estiver aberto
+    if (document.getElementById('page-painel').classList.contains('active')) carregarPainel();
+  }
+
+  function clearGG() {
+    const gcEl = document.getElementById('gg-contas'); if(gcEl) gcEl.value = '';
+    (document.getElementById('gg-agend')||{value:''}).value  = '';
+    calcGG();
+  }
+
+  function limparGGDia() {
+    const ag  = (document.getElementById('gg-agency')||{value:''}).value;
+    const ger = (document.getElementById('gg-gerente')||{value:''}).value;
+    const dt  = (document.getElementById('gg-date')||{value:''}).value;
+    if (!ag || !ger) { showToast('⚠️ Selecione agência e gerente.', true); return; }
+    if (!confirm('Apagar o lançamento de ' + ger + ' em ' + ag + '?')) return;
+    let store = JSON.parse(localStorage.getItem(GG_KEY) || '[]');
+    store = store.filter(r => !(r.agency === ag && r.gerente === ger && r.date === dt));
+    localStorage.setItem(GG_KEY, JSON.stringify(store));
+    showToast('🗑 Lançamento removido.');
+    const dtAtual = (document.getElementById('gg-date')||{value:''}).value;
+    renderRetorno(dtAtual);
+    carregarGGResumo();
+  }
+
+  function renderRetorno(date) {
+    const rows  = carregarGGDia(date);
+    const grid  = document.getElementById('retorno-grid');
+    const total = document.getElementById('retorno-total');
+    const [y,m,d] = (date||'----').split('-');
+    const lbl = document.getElementById('retorno-data-label');
+    if (lbl && date) lbl.textContent = d+'/'+m+'/'+y;
+
+    if (!rows.length) {
+      grid.innerHTML = '<div class="retorno-vazio">Nenhum lançamento para esta data</div>';
+      if (total) total.style.display = 'none';
+      return;
+    }
+
+    // Ordena melhor→pior por contas
+    const sorted = [...rows].sort((a,b) => b.contas - a.contas);
+    const maxContas = Math.max(...sorted.map(r => r.contas), META_DIARIA);
+
+    // Totalizador
+    const totContas = sorted.reduce((s,r) => s + r.contas, 0);
+    const metaTot   = sorted.length * META_DIARIA;
+    const pctTot    = Math.round((totContas / metaTot) * 100);
+    const naMeta    = sorted.filter(r => r.contas >= META_DIARIA).length;
+    const abaixo    = sorted.length - naMeta;
+
+    if (total) {
+      total.style.display = 'flex';
+      document.getElementById('rt-total-contas').textContent = totContas;
+      document.getElementById('rt-meta-total').textContent   = metaTot;
+      document.getElementById('rt-pct-total').textContent    = pctTot + '%';
+      document.getElementById('rt-pct-total').style.color    = pctTot >= 100 ? '#0d7a5f' : pctTot >= 60 ? '#e67e22' : '#b92d2d';
+      document.getElementById('rt-na-meta').textContent      = naMeta;
+      document.getElementById('rt-abaixo').textContent       = abaixo;
+    }
+
+    grid.innerHTML = sorted.map((r, i) => {
+      const pct    = Math.round((r.contas / META_DIARIA) * 100);
+      const barW   = Math.round((r.contas / Math.max(maxContas, META_DIARIA)) * 100);
+      const cls    = r.contas >= META_DIARIA ? 'meta-ok' : r.contas >= 3 ? 'meta-mid' : 'meta-low';
+      const color  = r.contas >= META_DIARIA ? '#0d7a5f' : r.contas >= 3 ? '#e67e22' : '#b92d2d';
+      const medal  = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
+      return `<div class="retorno-card ${cls}">
+        <div class="rc-gerente">${medal} ${r.gerente}</div>
+        <div class="rc-agencia">${r.agency}</div>
+        <div class="rc-num" style="color:${color}">${r.contas}</div>
+        <div class="rc-meta">de ${META_DIARIA} contas</div>
+        <div class="rc-bar-wrap">
+          <div class="rc-bar" style="width:${barW}%;background:${color}"></div>
+        </div>
+        <div class="rc-pct" style="color:${color}">${pct}%</div>
+      </div>`;
+    }).join('');
+  }
+
+  function carregarGGResumo() {
+    const date  = (document.getElementById('gg-date')||{value:''}).value;
+    const tbody = document.getElementById('tbody-gg-resumo');
+    if (!date) return;
+
+    // Sempre atualiza o retorno
+    renderRetorno(date);
+
+    const rows  = carregarGGDia(date);
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#aaa;padding:14px">Nenhum lançamento para esta data</td></tr>';
+      return;
+    }
+    // Ordena por contas abertas desc
+    const sorted = [...rows].sort((a,b) => b.contas - a.contas);
+
+    tbody.innerHTML = sorted.map(r => {
+      const pctC = Math.round((r.contas / META_DIARIA) * 100);
+      const pctA = Math.round((r.agend  / META_DIARIA) * 100);
+      const cls  = p => p >= 100 ? 'pct-ok' : p >= 60 ? 'pct-low' : 'pct-zero';
+      const badge= r.contas >= META_DIARIA && r.agend >= META_DIARIA
+        ? '<span class="badge ok">✅ Meta</span>'
+        : '<span class="badge pending">⏳ Abaixo</span>';
+      return `<tr>
+        <td class="ag">${r.agency}</td>
+        <td>${r.gerente}</td>
+        <td style="text-align:center;font-weight:700">${r.contas}</td>
+        <td style="text-align:center"><span class="pct-badge ${cls(pctC)}">${pctC}%</span></td>
+        <td style="text-align:center;font-weight:700">${r.agend}</td>
+        <td style="text-align:center"><span class="pct-badge ${cls(pctA)}">${pctA}%</span></td>
+        <td style="text-align:center">${badge}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // ── Ranking no Painel Regional ──────────────────────────
+  // ── Funções de Quartil ─────────────────────────────────────
+
+
+  function fmtValQ(v) {
+    const n = Math.abs(Number(v)||0);
+    if (n >= 1e6) return 'R$' + (n/1e6).toFixed(1) + 'M';
+    if (n >= 1e3) return 'R$' + (n/1e3).toFixed(0) + 'k';
+    return 'R$' + n.toFixed(0);
+  }
+
+  function renderPipe(agencias) {
+    const grid = document.getElementById('pipe-grid');
+    const lbl  = document.getElementById('pipe-total-label');
+    if (!grid) return;
+
+    const date = document.getElementById('painel-date').value;
+    const mes  = date ? date.slice(0,7) : new Date().toISOString().slice(0,7);
+
+    // Agrupa VOP por agência+gerente — soma, sem duplicar mesma data+gerente
+    const prodStore = JSON.parse(localStorage.getItem(PROD_KEY)  || '[]');
+    const diarStore = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+
+    const byKey = {};  // key = agency||gerente||date para deduplicar
+
+    // 1. PROD_KEY — aba produtividade
+    prodStore.filter(r => r.date && r.date.startsWith(mes)).forEach(r => {
+      const dedupKey = r.agency + '||' + r.gerente + '||' + r.date;
+      if (byKey[dedupKey]) return; // já existe, não soma novamente
+      byKey[dedupKey] = true;
+      const gKey = r.agency + '||' + r.gerente;
+      if (!byGerPipe[gKey]) byGerPipe[gKey] = { empresa: r.agency, gerente: r.gerente, vop: 0 };
+      byGerPipe[gKey].vop += Number(r.pipe) || 0;
+    });
+
+    // Precisamos de byGerPipe fora do forEach
+    const byGerPipe = {};
+    const seenDates = {};
+
+    prodStore.filter(r => r.date && r.date.startsWith(mes)).forEach(r => {
+      const dedupKey = r.agency + '||' + r.gerente + '||' + r.date;
+      if (seenDates[dedupKey]) return;
+      seenDates[dedupKey] = true;
+      const gKey = r.agency + '||' + r.gerente;
+      if (!byGerPipe[gKey]) byGerPipe[gKey] = { empresa: r.agency, gerente: r.gerente, vop: 0 };
+      byGerPipe[gKey].vop += Number(r.pipe) || 0;
+    });
+
+    diarStore.filter(r => r.date && r.date.startsWith(mes)).forEach(r => {
+      const ger = r.gerente || r.agency;
+      const dedupKey = r.agency + '||' + ger + '||' + r.date;
+      if (seenDates[dedupKey]) return;
+      seenDates[dedupKey] = true;
+      const gKey = r.agency + '||' + ger;
+      if (!byGerPipe[gKey]) byGerPipe[gKey] = { empresa: r.agency, gerente: ger, vop: 0 };
+      byGerPipe[gKey].vop += (Number(r.prodDesconto)||0) + (Number(r.antDemais)||0) + (Number(r.longoPrazo)||0);
+    });
+
+    const items = Object.values(byGerPipe).map(g => ({ empresa: g.empresa, gerente: g.gerente, valor: g.vop }));
+
+    // Fallback agências
+    if (!items.length) {
+      agencias.filter(a => a.enviado).forEach(ag => {
+        const vop = (ag.prodDesconto||0) + (ag.antDemais||0) + (ag.longoPrazo||0);
+        items.push({ empresa: ag.agency, gerente: ag.agency, valor: vop });
+      });
+    }
+
+    if (!items.length) {
+      grid.innerHTML = '<div style="color:#aaa;font-size:11px;padding:8px">Sem dados</div>';
+      if (lbl) lbl.textContent = '';
+      return;
+    }
+
+    items.sort((a,b) => b.valor - a.valor);
+    const total = items.reduce((s,i) => s + i.valor, 0);
+    if (lbl) lbl.textContent = `Total Pipe: ${fmtValQ(total)} | ${items.length} gerente${items.length!==1?'s':''}`;
+
+    grid.innerHTML = items.map(item => {
+      return `<div class="pipe-card">
+        <div class="pc-empresa" title="${item.empresa}">${item.empresa}</div>
+        <div class="pc-gerente" title="${item.gerente}">${item.gerente}</div>
+        <div class="pc-valor">${fmtValQ(item.valor)}</div>
+      </div>`;
+    }).join('');
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+  // Limpar GG do painel regional (por data)
+  function limparGGRegional() {
+    const date = document.getElementById('painel-date').value;
+    const [y,m,d] = date.split('-');
+    if (!confirm('Apagar TODOS os lançamentos GG do dia ' + d+'/'+m+'/'+y + '?')) return;
+    let store = JSON.parse(localStorage.getItem(GG_KEY) || '[]');
+    store = store.filter(r => r.date !== date);
+    localStorage.setItem(GG_KEY, JSON.stringify(store));
+    showToast('🗑 Lançamentos GG do dia apagados.');
+    carregarPainel();
+  }
+
+  const SCRIPT_URL     = 'COLE_AQUI_A_URL_DO_SEU_APPS_SCRIPT';
+  const TOTAL_AGENCIAS = 12;
+  const META_DIARIA    = 5;
+  const GER_KEY        = 'gerentes_agencias';
+  const GG_KEY         = 'lancamentos_gg';
+  const STORE_KEY      = 'lancamentos_agencias';
+  const SALDOS_KEY     = 'saldos_mensais_agencias';
+
+  const today = new Date().toISOString().split('T')[0];
+
+  document.getElementById('ref-date').value    = today;
+  document.getElementById('painel-date').value = today;
+  var _ggDate = document.getElementById('gg-date'); if (_ggDate) _ggDate.value = today;
+  // Inicializa dashboard com acumulado do mês — atualiza a cada 30s
+  setTimeout(() => atualizarDashTotal(today), 200);
+  setInterval(() => atualizarDashTotal((document.getElementById('ref-date')||{value:today}).value||today), 30000);
+
+  const _prodDataEl = document.getElementById('prod-data');
+  if (_prodDataEl) _prodDataEl.value = today;
+  const _diarioDia = document.getElementById('diario-dia');
+  if (_diarioDia) _diarioDia.value = today;
+  const _prodMesEl = document.getElementById('prod-mes');
+  if (_prodMesEl) _prodMesEl.value = today.slice(0,7);
+  // Chama produtividade ao abrir se já tem mês
+  setTimeout(() => { if(_prodMesEl && _prodMesEl.value) renderProdutividade(); }, 100);
+
+  const dias = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+  (function(){
+    const [y,m,d] = today.split('-');
+    const dt = new Date(y,m-1,d);
+    document.getElementById('header-date').textContent = `${dias[dt.getDay()]}, ${d}/${m}/${y}`;
+  })();
+
+  // Salva os valores iniciais de cima ao digitar — persiste sem precisar enviar
+  function salvarIniciaisCima() {
+    const agency = document.getElementById('agency-select').value;
+    if (!agency) return;
+    const metaVop    = g('m-metaVop');
+    const descIni    = g('m-descIni');
+    const quenteIni  = g('m-quenteIni');
+    const arvIni     = g('m-arvIni');
+    const liqIni     = g('m-liqIni');
+    const netDiaAnt  = parseFloat(document.getElementById('m-netDiaAnt').value) || 0;
+
+    // Só salva se pelo menos um campo tiver valor
+    if (!metaVop && !descIni && !quenteIni && !arvIni && !liqIni) return;
+
+    const exist = carregarSaldosMensais(agency) || {};
+    salvarSaldosMensais(agency, {
+      // Sempre atualiza os iniciais com o que está na tela agora
+      metaVopInicial: metaVop  || exist.metaVopInicial,
+      descInicial:    descIni  || exist.descInicial,
+      quenteInicial:  quenteIni|| exist.quenteInicial,
+      arvInicial:     arvIni   || exist.arvInicial,
+      liqInicial:     liqIni   || exist.liqInicial,
+      netAcumulado:   netDiaAnt|| exist.netAcumulado,
+    });
+  }
+
+  function resetarMes(e) {
+    if (e) e.preventDefault();
+    const agency = document.getElementById('agency-select').value;
+    if (!agency) { showToast('⚠️ Selecione a agência primeiro.', true); return; }
+    if (!confirm('Redefinir os valores iniciais de ' + agency + ' para o novo mês?\nOs campos de cima serão limpos.')) return;
+    // Remove saldos mensais da agência
+    let store = JSON.parse(localStorage.getItem(SALDOS_KEY) || '{}');
+    delete store[agency];
+    localStorage.setItem(SALDOS_KEY, JSON.stringify(store));
+    // Limpa campos de cima
+    ['m-metaVop','m-descIni','m-quenteIni','m-arvIni','m-liqIni','m-netDiaAnt']
+      .forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+    calcTudo();
+    showToast('✅ Pronto! Preencha os valores iniciais do novo mês.');
+  }
+
+  function editarQuadroMensal() {
+    // Habilita todos os inputs do quadro mensal para edição
+    const campos = ['m-metaVop','m-descIni','m-quenteIni','m-arvIni','m-liqIni','m-netDiaAnt'];
+    campos.forEach(function(id) {
+      const el = document.getElementById(id);
+      if (el) {
+        el.removeAttribute('disabled');
+        el.style.background = '#fffbea';
+        el.style.borderColor = '#e67e22';
+      }
+    });
+    showToast('✏️ Campos habilitados para edição. Salva automaticamente ao digitar.');
+  }
+
+  function syncNomes() {
+    const ag = document.getElementById('agency-select').value;
+    const v  = ag || '— Selecione —';
+    document.getElementById('td-ag-m').textContent = v;
+    document.getElementById('td-ag-d').textContent = v;
+
+    // Popula datalist de gerentes da agência
+    const dl = document.getElementById('gerentes-list');
+    const hint = document.getElementById('gerentes-hint');
+    if (dl) {
+      dl.innerHTML = '';
+      const gers = ag ? gerentesDaAgencia(ag) : [];
+      gers.forEach(g => {
+        const opt = document.createElement('option');
+        opt.value = g.nome;
+        dl.appendChild(opt);
+      });
+      if (hint) {
+        hint.textContent = gers.length
+          ? 'Gerentes cadastrados: ' + gers.map(g => g.nome).join(', ')
+          : ag ? 'Nenhum gerente cadastrado. Use 👥 para adicionar.' : '';
+      }
+      // Restaura último gerente usado nesta agência
+      const ultimo = localStorage.getItem('ultimo_gerente_' + ag);
+      var refGer = document.getElementById('ref-gerente');
+      if (ultimo && refGer && refGer.value === '') { refGer.value = ultimo; }
+    }
+
+    // Limpa campos de baixo ao trocar de agência (não os de cima)
+    ['d-desc','d-ant','d-lp','d-liq'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+
+    // Limpa campos de CIMA só se mudar de agência
+    // (para que os salvos da nova agência apareçam corretamente)
+    ['m-metaVop','m-descIni','m-quenteIni','m-arvIni','m-liqIni','m-netDiaAnt']
+      .forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+
+    if (ag) preencherCima(ag);
+    calcTudo();
+  }
+
+  function salvarUltimoGerente(nome) {
+    const ag = document.getElementById('agency-select').value;
+    if (ag && nome) localStorage.setItem('ultimo_gerente_' + ag, nome);
+  }
+
+  function fmtShort(v) {
+    const n = Number(v) || 0;
+    const abs = Math.abs(n);
+    let s;
+    if (abs >= 1e6)      s = 'R$ ' + (abs/1e6).toFixed(1) + 'M';
+    else if (abs >= 1e3) s = 'R$ ' + (abs/1e3).toFixed(0) + 'k';
+    else                 s = 'R$ ' + abs.toFixed(0);
+    return n < 0 ? '(' + s + ')' : s;
+  }
+
+  // Atualiza dashboard — VOP acumulado do mês vs meta total
+  function atualizarDashTotal(dateStr) {
+    try {
+      const date    = dateStr || document.getElementById('ref-date').value || today;
+      const mes     = date.slice(0, 7); // YYYY-MM
+      const store   = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+      const saldos  = JSON.parse(localStorage.getItem(SALDOS_KEY) || '{}');
+
+      // VOP acumulado = soma de TODOS os dias do mês (todos os lançamentos)
+      const doMes     = store.filter(r => r.date && r.date.startsWith(mes));
+      const totalVop  = doMes.reduce((s,r) => s + ((Number(r.prodDesconto)||0)+(Number(r.antDemais)||0)+(Number(r.longoPrazo)||0)), 0);
+      const totalNet  = doMes.reduce((s,r) => s + (Number(r.netDia)||0), 0);
+
+      // Meta = soma das metas mensais de todas as agências
+      const totalMeta = Object.values(saldos).reduce((s,ag) => s + (Number(ag.metaVopInicial)||0), 0);
+
+      // VOP do dia atual (para o card VOP Dia)
+      const doDia    = store.filter(r => r.date === date);
+      const vopDia   = doDia.reduce((s,r) => s + ((Number(r.prodDesconto)||0)+(Number(r.antDemais)||0)+(Number(r.longoPrazo)||0)), 0);
+      const netDia   = doDia.reduce((s,r) => s + (Number(r.netDia)||0), 0);
+
+      // Net Acumulado = soma(saldoLiq + somaNetDia) de cada agência no mês
+      const AGENCIAS_DASH = ['Alphaville','Lapa','Osasco','Santana','Vila Maria','Sorocaba',
+                             'Tatuape','Cidade Jardim','Santo Amaro','JK','Itaim','Sumaré'];
+      const netAcumTotal = AGENCIAS_DASH.reduce((tot, ag) => {
+        const ac = calcAcumuladoMes(ag, mes);
+        if (!ac) return tot;
+        return tot + ac.saldoLiq + ac.somaNetDia;
+      }, 0);
+
+      atualizarDash(totalVop, totalMeta, vopDia, netDia, netAcumTotal);
+    } catch(e) { console.error('atualizarDashTotal:', e); }
+  }
+
+  function atualizarDash(realVop, metaVop, vopDia, netDia, netAcum) {
+    try {
+    // Relógio
+    const pct = metaVop > 0 ? Math.min((realVop / metaVop) * 100, 100) : 0;
+    const circ = 2 * Math.PI * 15.9;
+    const offset = circ - (pct / 100) * circ;
+    const arc = document.getElementById('vop-arc');
+    arc.style.strokeDasharray = circ + ' ' + circ;
+    arc.style.strokeDashoffset = offset;
+    // cor do arco
+    arc.style.stroke = pct >= 100 ? '#4ade80' : pct >= 70 ? '#facc15' : '#f87171';
+
+    document.getElementById('vop-clock-pct').textContent = Math.round(pct) + '%';
+    document.getElementById('dash-real').textContent     = fmtBRL(realVop);
+    document.getElementById('dash-meta').textContent     = fmtBRL(metaVop);
+
+
+
+    // Relógio de projeção: VOP realizado vs onde deveria estar hoje
+    try {
+      const now        = new Date();
+      const diaHoje    = now.getDate();
+      const diasMes    = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+      const metaHoje   = metaVop > 0 ? Math.round((diaHoje / diasMes) * metaVop) : 0;
+      const pctProj    = metaHoje > 0 ? Math.min((realVop / metaHoje) * 100, 150) : 0;
+      const circP      = 2 * Math.PI * 15.9;
+      const offsetP    = circP - (Math.min(pctProj,100) / 100) * circP;
+      const arcP       = document.getElementById('proj-arc');
+      if (arcP) {
+        arcP.style.strokeDasharray  = circP + ' ' + circP;
+        arcP.style.strokeDashoffset = offsetP;
+        arcP.style.stroke = pctProj >= 100 ? '#4ade80' : pctProj >= 80 ? '#facc15' : '#f87171';
+      }
+      const pctProjEl = document.getElementById('proj-clock-pct');
+      if (pctProjEl) { pctProjEl.textContent = Math.round(pctProj) + '%'; pctProjEl.style.color = pctProj >= 100 ? '#4ade80' : pctProj >= 80 ? '#facc15' : '#f87171'; }
+      const mhEl = document.getElementById('dash-meta-hoje');
+      if (mhEl) mhEl.textContent = fmtBRL(metaHoje);
+      const subEl = document.getElementById('dash-proj-sub');
+      if (subEl) subEl.textContent = 'dia ' + diaHoje + ' de ' + diasMes;
+    } catch(e) {}
+
+    // VOP Dia
+    document.getElementById('dash-vopdia').textContent   = fmtBRL(vopDia);
+
+    // Net Dia
+    const ndEl  = document.getElementById('dash-netdia');
+    ndEl.textContent = fmtBRL(netDia);
+    ndEl.style.color = netDia  >= 0 ? '#4ade80' : '#f87171';
+    document.getElementById('dash-netdia-sub').textContent = netDia >= 0 ? '▲ positivo' : '▼ negativo';
+    const npEl = document.getElementById('dash-netproj');
+    if (npEl) {
+      const npv = calcNetProjMesRegional();
+      npEl.textContent = fmtBRL(npv);
+      npEl.style.color = npv >= 0 ? '#90ee90' : '#ff9999';
+      const npSub = document.getElementById('dash-netproj-sub');
+      if (npSub) npSub.textContent = npv >= 0 ? '▲ positivo' : '▼ negativo';
+    }
+
+    // Net Acumulado
+    const naEl  = document.getElementById('dash-netacum');
+    naEl.textContent = fmtBRL(netAcum);
+    naEl.style.color = netAcum >= 0 ? '#4ade80' : '#f87171';
+    document.getElementById('dash-netacum-sub').textContent = netAcum >= 0 ? '▲ positivo' : '▼ negativo';
+    } catch(err) { console.error('atualizarDash erro:', err); }
+  }
+
+  // ── EmailJS config ──────────────────────────────────────────
+  // Instruções: crie conta em emailjs.com, crie um serviço Gmail
+  // e um template com variáveis {{to_email}}, {{subject}}, {{message}}
+  // Depois substitua os valores abaixo pelos seus
+  const EMAILJS_SERVICE_ID  = 'COLE_SEU_SERVICE_ID';   // ex: service_abc123
+  const EMAILJS_TEMPLATE_ID = 'COLE_SEU_TEMPLATE_ID';  // ex: template_xyz789
+  const EMAILJS_PUBLIC_KEY  = 'COLE_SUA_PUBLIC_KEY';   // ex: user_XXXXXXXX
+  const EMAIL_DESTINO       = 'tais2017amorim18@gmail.com';
+
+  (function initEmailJS(){
+    if (typeof emailjs !== 'undefined') {
+      emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
+    }
+  })();
+
+  function montarCorpoEmail(date) {
+    const data = montarPainelLocal(date);
+    const { agencias, regional, pendentes, totalEnviadas } = data;
+    const [y,m,d] = date.split('-');
+    const fmtN = v => {
+      const n = Number(v)||0;
+      const abs = Math.abs(n);
+      const s = 'R$ ' + abs.toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0});
+      return n < 0 ? '('+s+')' : s;
+    };
+
+    let txt = `CONSOLIDADO REGIONAL — ${d}/${m}/${y}\n`;
+    txt += `${'='.repeat(55)}\n`;
+    txt += `Agências enviadas: ${totalEnviadas}/12\n`;
+    if (pendentes.length) txt += `Pendentes: ${pendentes.join(', ')}\n`;
+    txt += `\n`;
+
+    txt += `QUADRO DIÁRIO\n${'-'.repeat(55)}\n`;
+    txt += `${'Agência'.padEnd(18)} ${'VOP Dia'.padStart(14)} ${'Liquidação'.padStart(14)} ${'Net Dia'.padStart(14)}\n`;
+    agencias.forEach(a => {
+      if (!a.enviado) return;
+      txt += `${a.agency.padEnd(18)} ${fmtN(a.vopDia).padStart(14)} ${fmtN(a.liquidacaoTotal).padStart(14)} ${fmtN(a.netDia).padStart(14)}\n`;
+    });
+    txt += `${'-'.repeat(55)}\n`;
+    txt += `${'REGIONAL'.padEnd(18)} ${fmtN(regional.vopDia).padStart(14)} ${fmtN(regional.liquidacaoTotal).padStart(14)} ${fmtN(regional.netDia).padStart(14)}\n`;
+
+    txt += `\nQUADRO MENSAL / ACUMULADO\n${'-'.repeat(55)}\n`;
+    txt += `${'Agência'.padEnd(18)} ${'Real. VOP'.padStart(13)} ${'Saldo Desc'.padStart(13)} ${'Saldo ARV'.padStart(13)} ${'Net Acum'.padStart(13)}\n`;
+    agencias.forEach(a => {
+      if (!a.enviado) return;
+      const realVop   = a.prodDesconto + a.antDemais + a.longoPrazo;
+      const saldoDesc = a.descInicial - a.prodDesconto;
+      const saldoArv  = a.arvInicial  - a.antDemais;
+      const netAcum   = (a.netDiaAnterior||0) + a.netDia;
+      txt += `${a.agency.padEnd(18)} ${fmtN(realVop).padStart(13)} ${fmtN(saldoDesc).padStart(13)} ${fmtN(saldoArv).padStart(13)} ${fmtN(netAcum).padStart(13)}\n`;
+    });
+    txt += `${'-'.repeat(55)}\n`;
+    const rRealVop   = regional.prodDesconto + regional.antDemais + regional.longoPrazo;
+    const rSaldoDesc = regional.descInicial - regional.prodDesconto;
+    const rSaldoArv  = regional.arvInicial  - regional.antDemais;
+    const rNetAcum   = (regional.netDiaAnterior||0) + regional.netDia;
+    txt += `${'REGIONAL'.padEnd(18)} ${fmtN(rRealVop).padStart(13)} ${fmtN(rSaldoDesc).padStart(13)} ${fmtN(rSaldoArv).padStart(13)} ${fmtN(rNetAcum).padStart(13)}\n`;
+
+    txt += `\nEnviado automaticamente pelo sistema de produção diária.`;
+    return txt;
+  }
+
+  function enviarEmailConsolidado() {
+    if (typeof emailjs === 'undefined') {
+      showToast('❌ EmailJS não carregou. Verifique sua conexão.', true);
+      return;
+    }
+    if (EMAILJS_SERVICE_ID === 'COLE_SEU_SERVICE_ID') {
+      showToast('⚠️ Configure o EmailJS primeiro (SERVICE_ID, TEMPLATE_ID, PUBLIC_KEY).', true);
+      return;
+    }
+    const date = document.getElementById('painel-date').value;
+    const [y,m,d] = date.split('-');
+    const btn = document.getElementById('btn-email');
+    const icon = document.getElementById('email-icon');
+    btn.disabled = true;
+    icon.textContent = '⏳';
+
+    const corpo = montarCorpoEmail(date);
+    emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+      to_email: EMAIL_DESTINO,
+      subject:  `Consolidado Regional — ${d}/${m}/${y}`,
+      message:  corpo
+    })
+    .then(() => {
+      showToast('✅ Consolidado enviado para ' + EMAIL_DESTINO);
+      icon.textContent = '✅';
+      setTimeout(() => { icon.textContent = '📧'; btn.disabled = false; }, 3000);
+    })
+    .catch(err => {
+      showToast('❌ Erro ao enviar e-mail: ' + (err.text || err), true);
+      icon.textContent = '📧';
+      btn.disabled = false;
+    });
+  }
+
+
+
+  // ── Gerenciar Prod. do Dia ──────────────────────────────────
+  function abrirGerenciarDia() {
+    const ag = document.getElementById('agency-select').value;
+    const dt = document.getElementById('ref-date').value;
+    const modal = document.getElementById('gerdia-modal');
+    modal.style.display = 'flex';
+    if (ag) document.getElementById('gd-agency').value = ag;
+    if (dt) document.getElementById('gd-date').value   = dt;
+    carregarProdDia();
+  }
+
+  function fecharGerenciarDia() {
+    document.getElementById('gerdia-modal').style.display = 'none';
+  }
+
+  function carregarProdDia() {
+    const agency = document.getElementById('gd-agency').value;
+    const date   = document.getElementById('gd-date').value;
+    const cont   = document.getElementById('gd-content');
+    if (!agency || !date) {
+      cont.innerHTML = '<div style="color:#aaa;text-align:center;padding:16px">Selecione agência e data</div>';
+      return;
+    }
+    const store = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+    const rows  = store.filter(r => r.agency === agency && r.date === date);
+
+    if (!rows.length) {
+      cont.innerHTML = '<div style="color:#aaa;text-align:center;padding:16px">Nenhum lançamento encontrado para esta agência e data.</div>';
+      return;
+    }
+
+    const [y,m,d] = date.split('-');
+    cont.innerHTML = `
+      <div style="font-size:11px;color:#1a3a6e;font-weight:600;margin-bottom:8px">${agency} — ${d}/${m}/${y}</div>
+      <table class="gd-table">
+        <thead><tr>
+          <th>Gerente</th>
+          <th style="text-align:right">Prod.Desc</th>
+          <th style="text-align:right">Ant/Demais</th>
+          <th style="text-align:right">Longo Prazo</th>
+          <th style="text-align:right">Liquidação</th>
+          <th style="text-align:right">VOP Dia</th>
+          <th style="text-align:right">Net Dia</th>
+          <th></th>
+        </tr></thead>
+        <tbody>
+          ${rows.map((r, i) => {
+            const vop = (Number(r.prodDesconto)||0)+(Number(r.antDemais)||0)+(Number(r.longoPrazo)||0);
+            const net = vop + (Number(r.liquidacaoTotal)||0);  // liq negativa
+            const nc  = net >= 0 ? '#0d7a5f' : '#b92d2d';
+            return `<tr id="gd-row-${i}">
+              <td style="font-weight:600;color:#1a3a6e">${r.gerente||agency}</td>
+              <td><input type="number" id="gd-desc-${i}" value="${r.prodDesconto||0}" oninput="calcGdRow(${i})"></td>
+              <td><input type="number" id="gd-ant-${i}"  value="${r.antDemais||0}"   oninput="calcGdRow(${i})"></td>
+              <td><input type="number" id="gd-lp-${i}"   value="${r.longoPrazo||0}"  oninput="calcGdRow(${i})"></td>
+              <td><input type="number" id="gd-liq-${i}"  value="${r.liquidacaoTotal||0}" oninput="calcGdRow(${i})"></td>
+              <td id="gd-vop-${i}" style="text-align:right;font-weight:600">${fmtBRL(vop)}</td>
+              <td id="gd-net-${i}" style="text-align:right;font-weight:700;color:${nc}">${fmtBRL(net)}</td>
+              <td style="white-space:nowrap">
+                <button class="btn-gd-save" onclick="salvarEdicaoDia(${i},'${agency}','${date}')">✔ Salvar</button>
+                <button class="btn-gd-del"  onclick="excluirProdDia('${agency}','${date}','${r.gerente||agency}')">🗑</button>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+      <div style="font-size:10px;color:#888">✔ Edite os campos e clique em Salvar. 🗑 Exclui o lançamento.</div>`;
+  }
+
+  function calcGdRow(i) {
+    const desc = parseFloat(document.getElementById('gd-desc-'+i).value)||0;
+    const ant  = parseFloat(document.getElementById('gd-ant-'+i).value) ||0;
+    const lp   = parseFloat(document.getElementById('gd-lp-'+i).value)  ||0;
+    const liq  = parseFloat(document.getElementById('gd-liq-'+i).value) ||0;
+    const vop  = desc + ant + lp;
+    const net  = vop + liq;  // liq negativa
+    const vopEl = document.getElementById('gd-vop-'+i);
+    const netEl = document.getElementById('gd-net-'+i);
+    if (vopEl) vopEl.textContent = fmtBRL(vop);
+    if (netEl) { netEl.textContent = fmtBRL(net); netEl.style.color = net >= 0 ? '#0d7a5f' : '#b92d2d'; }
+  }
+
+  function salvarEdicaoDia(i, agency, date) {
+    let store = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+    const idx = store.findIndex(r => r.agency === agency && r.date === date);
+    if (idx === -1) { showToast('❌ Registro não encontrado.', true); return; }
+    const desc = parseFloat(document.getElementById('gd-desc-'+i).value)||0;
+    const ant  = parseFloat(document.getElementById('gd-ant-'+i).value) ||0;
+    const lp   = parseFloat(document.getElementById('gd-lp-'+i).value)  ||0;
+    const liq  = parseFloat(document.getElementById('gd-liq-'+i).value) ||0;
+    const vop  = desc + ant + lp;
+    const net  = vop + liq;
+    store[idx] = { ...store[idx], prodDesconto: desc, antDemais: ant, longoPrazo: lp,
+      liquidacaoTotal: liq, vopDia: vop, netDia: net };
+    localStorage.setItem(STORE_KEY, JSON.stringify(store));
+    showToast('✅ Lançamento atualizado!');
+    carregarProdDia();
+    // Recarrega cima se for a mesma agência
+    if (document.getElementById('agency-select').value === agency) {
+      setTimeout(() => preencherCima(agency), 50);
+    }
+  }
+
+  function excluirProdDia(agency, date, gerente) {
+    if (!confirm('Excluir o lançamento de ' + gerente + ' em ' + date + '?')) return;
+    let store = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+    store = store.filter(r => !(r.agency === agency && r.date === date && (r.gerente||agency) === gerente));
+    localStorage.setItem(STORE_KEY, JSON.stringify(store));
+    showToast('🗑 Lançamento excluído.');
+    carregarProdDia();
+    if (document.getElementById('agency-select').value === agency) {
+      setTimeout(() => preencherCima(agency), 50);
+    }
+  }
+
+  // ── Filtro de agências ───────────────────────────────────────
+  function filtrarTabelas() {
+    const termo = (document.getElementById('filtro-agencia').value || '').toLowerCase().trim();
+    ['tbody-mensal','tbody-diario'].forEach(id => {
+      const tbody = document.getElementById(id);
+      if (!tbody) return;
+      Array.from(tbody.rows).forEach(row => {
+        const agCell = row.cells[0];
+        if (!agCell) return;
+        const nome = agCell.textContent.toLowerCase();
+        // Always show Regional row
+        if (nome.includes('regional')) { row.style.display = ''; return; }
+        row.style.display = (!termo || nome.includes(termo)) ? '' : 'none';
+      });
+    });
+  }
+
+  function limparFiltro() {
+    document.getElementById('filtro-agencia').value = '';
+    filtrarTabelas();
+  }
+
+  function showTab(tab) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    const tabs  = document.querySelectorAll('.tab');
+    if (tab === 'lancamento') {
+      tabs[0].classList.add('active');
+      document.getElementById('page-lancamento').classList.add('active');
+    } else if (tab === 'gg') {
+      tabs[1].classList.add('active');
+      document.getElementById('page-gg').classList.add('active');
+      // Não pré-preenche prod-mes — usuário seleciona
+      if (!document.getElementById('prod-data').value)
+        document.getElementById('prod-data').value = today;
+      const _dm = document.getElementById('diario-mes');
+      if (_dm && !_dm.value) _dm.value = today.slice(0,7);
+      renderMiniDashNetProj();
+    } else {
+      tabs[2].classList.add('active');
+      document.getElementById('page-painel').classList.add('active');
+      carregarPainel();
+    }
+  }
+
+  function atualizarSelectsGG() {
+    // Popula select de agências na aba GG
+    const sel = document.getElementById('gg-agency');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">— Selecione —</option>';
+    const AGENCIAS_GG = ['Alphaville','Lapa','Osasco','Santana','Vila Maria','Sorocaba',
+      'Tatuape','Cidade Jardim','Santo Amaro','JK','Itaim','Sumaré'];
+    AGENCIAS_GG.forEach(ag => {
+      const o = document.createElement('option');
+      o.value = ag; o.textContent = ag;
+      if (ag === cur) o.selected = true;
+      sel.appendChild(o);
+    });
+    atualizarSelectGerente();
+  }
+
+  function fmtBRL(v) {
+    const n = Number(v||0) || 0;
+    const abs = Math.abs(n);
+    const s = 'R$ ' + abs.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    return n < 0 ? '(' + s + ')' : s;
+  }
+  function fmtPct(v) { return (Number(v)||0).toFixed(1) + '%'; }
+  function g(id) { return parseFloat(document.getElementById(id).value) || 0; }
+  function cls(v) { return Number(v) >= 0 ? 'pos' : 'neg'; }
+  function setCell(id, val, base) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = fmtBRL(val);
+    if (base) el.className = base + ' ' + cls(val);
+  }
+
+  // Net Acumulado de cima: Net Dia Anterior (informado) + Net Dia atual
+  function calcNetAcumAgencia(agencia, dataAtual, netDiaHoje) {
+    const netAnt = parseFloat(document.getElementById('m-netDiaAnt').value) || 0;
+    return netAnt + netDiaHoje;
+  }
+
+  function calcTudo() {
+    try {
+    // Diário
+    const desc     = g('d-desc');
+    const ant      = g('d-ant');
+    const lp       = g('d-lp');
+    const liq      = g('d-liq');
+    // VOP Dia = Desc + Ant/Demais + Longo Prazo
+    const vopDia  = desc + ant + lp;
+    // Net Dia = VOP Dia − Liquidação
+    const netDia  = vopDia + liq;  // liq negativa, já vem com sinal
+
+    setCell('td-vopDia', vopDia, 'auto-val');
+    setCell('td-netDia', netDia, 'net-dia');
+
+    // Mensal
+    const metaVop   = g('m-metaVop');
+    const descIni   = g('m-descIni');
+    const quenteIni = g('m-quenteIni');
+    const arvIni    = g('m-arvIni');
+    const liqIni    = g('m-liqIni');
+    // Net Acumulado de cima = soma dos Net Dia salvos localmente para esta agência
+    const agenciaNome = document.getElementById('agency-select').value;
+    const dataSel     = document.getElementById('ref-date').value;
+    const netAcumCima = calcNetAcumAgencia(agenciaNome, dataSel, netDia);
+
+    // Quadro de cima
+    const realVop     = vopDia;
+    const saldoDesc   = descIni - desc;    // Desc.Ini − Prod.Desconto do dia
+    const saldoQuente = quenteIni;         // Quente: fixo
+    const saldoArv    = arvIni  - ant;     // ARV.Ini − Ant/Demais do dia
+
+    // Saldo Liquidação = liqIni deduzindo TODA a liquidação acumulada do mês
+    const _acum    = calcAcumuladoMes(agenciaNome);
+    const somaLiqMes = _acum ? _acum.somaLiq : 0;  // soma de todas liq do mês (negativas)
+    const saldoLiq = liqIni - somaLiqMes;           // liqIni − soma liq (somaLiq é negativa, deduz)
+
+    // Net Atual = campo informado (net acumulado atual)
+    const netAtual = parseFloat(document.getElementById('m-netDiaAnt').value) || 0;
+
+    // Net Acumulado = Saldo Liquidação + Net Atual
+    const netAcumCalc = saldoLiq + netAtual;
+
+    // Net Projetado = Net Acumulado + Saldo Desc + Saldo ARV + Quente
+    const netProj = netAcumCalc + saldoDesc + saldoArv + saldoQuente;
+
+    const pct  = metaVop > 0 ? Math.min((realVop / metaVop) * 100, 100) : 0;
+    const fill = document.getElementById('prog-fill');
+    if (fill) {
+      fill.style.width = pct + '%';
+      fill.className   = 'prog-fill ' + (pct >= 100 ? 'ok' : pct >= 70 ? 'warn' : '');
+    }
+    const progTxt = document.getElementById('prog-txt');
+    const progPct = document.getElementById('prog-pct');
+    if (progTxt) progTxt.textContent = `VOP Dia: ${fmtBRL(realVop)} | Meta: ${fmtBRL(metaVop)}`;
+    if (progPct) progPct.textContent = fmtPct(pct);
+
+    setCell('td-realVop',     realVop,     'auto-val');
+    setCell('td-saldoDesc',   saldoDesc,   'saldo');
+    setCell('td-saldoQuente', saldoQuente, 'saldo');
+    setCell('td-saldoArv',    saldoArv,    'saldo');
+    setCell('td-saldoLiq',    saldoLiq,    'saldo');   // Liq saldo atualizado
+    setCell('td-netAcumCima', netAcumCalc, 'net-acum');
+    setCell('td-netProj',     netProj,     'net-proj');
+
+    // Atualiza dashboard
+    // Dashboard atualiza via atualizarDashTotal (chamado após submit)
+    atualizarDashTotal(dataSel);
+    } catch(err) { console.error('calcTudo erro:', err); }
+  }
+
+  function clearForm() {
+    // Limpa apenas o quadro de baixo (diário)
+    ['d-desc','d-ant','d-lp','d-liq']
+    .forEach(id => { document.getElementById(id).value = ''; });
+    calcTudo();
+  }
+
+  function submitData() {
+    const agency = document.getElementById('agency-select').value;
+    const date   = document.getElementById('ref-date').value;
+    if (!agency) { showToast('⚠️ Selecione sua agência!', true); return; }
+
+    const desc     = g('d-desc'), ant = g('d-ant');
+    const lp       = g('d-lp'),   liq    = g('d-liq');
+    const vopDia   = desc + ant + lp;
+    const netDia   = vopDia + liq;
+    const payload = {
+      agency, date,
+      // Mensal
+      metaVop:    g('m-metaVop'),
+      descInicial: g('m-descIni'),
+      quenteInicial: g('m-quenteIni'),
+      arvInicial:  g('m-arvIni'),
+      liqInicial:  g('m-liqIni'),
+      // Mensal extra
+      netDiaAnterior: parseFloat(document.getElementById('m-netDiaAnt').value)||0,
+      gerente: agency,
+      // Diário
+      prodDesconto: desc, antDemais: ant,
+      longoPrazo: lp, liquidacaoTotal: liq,
+      // Calculados
+      vopDia, netDia,
+      netProjMes: window._lastNetProjMes || 0
+    };
+
+    // Salva sempre localmente
+    salvarLocal(payload);
+
+    // Atualiza dashboard com soma de todas as agências
+    atualizarDashTotal(date);
+
+    // Após salvar, atualiza campos de cima com acumulado real do mês
+    setTimeout(() => preencherCima(agency), 50);
+
+    // Salva os valores INICIAIS do mês (não os deduzidos — esses são calculados na hora)
+    const saldosMensaisExist = carregarSaldosMensais(agency) || {};
+    // Só sobrescreve os iniciais se ainda não foram definidos
+    const novosSaldos = {
+      metaVopInicial:  saldosMensaisExist.metaVopInicial  ?? payload.metaVop,
+      descInicial:     saldosMensaisExist.descInicial     ?? payload.descInicial,
+      arvInicial:      saldosMensaisExist.arvInicial      ?? payload.arvInicial,
+      liqInicial:      saldosMensaisExist.liqInicial      ?? payload.liqInicial,
+      quenteInicial:   saldosMensaisExist.quenteInicial   ?? payload.quenteInicial,
+    };
+    salvarSaldosMensais(agency, novosSaldos);
+
+    setLoading(true);
+    if (SCRIPT_URL && SCRIPT_URL !== 'COLE_AQUI_A_URL_DO_SEU_APPS_SCRIPT') {
+      fetch(SCRIPT_URL, {
+        method: 'POST', mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      .then(() => showToast('✅ Produção enviada! Painel atualizado.'))
+      .catch(() => showToast('✅ Salvo localmente. Verifique a conexão.'))
+      .finally(() => setLoading(false));
+    } else {
+      showToast('✅ Produção salva! Veja o Painel Regional.');
+      setLoading(false);
+    }
+  }
+
+  function setLoading(on) {
+    document.getElementById('spinner').style.display = on ? 'inline-block' : 'none';
+    document.getElementById('btn-text').textContent  = on ? 'Enviando...' : 'Enviar Produção do Dia';
+    document.getElementById('btn-enviar').disabled   = on;
+  }
+
+  // ── Armazenamento local de lançamentos ────────────────────
+  // Salva saldos mensais da agência (atualiza após cada envio)
+  function salvarSaldosMensais(agency, saldos) {
+    let store = JSON.parse(localStorage.getItem(SALDOS_KEY) || '{}');
+    store[agency] = saldos;
+    localStorage.setItem(SALDOS_KEY, JSON.stringify(store));
+  }
+
+  // Carrega saldos mensais salvos para pré-preencher campos de cima
+  function carregarSaldosMensais(agency) {
+    const store = JSON.parse(localStorage.getItem(SALDOS_KEY) || '{}');
+    return store[agency] || null;
+  }
+
+  // Calcula consolidado acumulado do mês para a agência
+  function calcAcumuladoMes(agency, mesParam) {
+    const mes   = mesParam || new Date().toISOString().slice(0, 7);
+    const store = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+    const rows  = store.filter(r => r.agency === agency && r.date && r.date.startsWith(mes));
+    if (!rows.length) return null;
+
+    const acum = { somaDesc:0, somaAnt:0, somaLp:0, somaLiq:0, somaVop:0, somaNetDia:0 };
+    rows.forEach(r => {
+      acum.somaDesc   += Number(r.prodDesconto)   || 0;
+      acum.somaAnt    += Number(r.antDemais)       || 0;
+      acum.somaLp     += Number(r.longoPrazo)      || 0;
+      acum.somaLiq    += Number(r.liquidacaoTotal) || 0;
+      acum.somaVop    = acum.somaDesc + acum.somaAnt + acum.somaLp; // VOP = Desc+Ant+LP
+      acum.somaNetDia += Number(r.netDia)          || 0;
+    });
+    // Pega valores iniciais do último registro (ou do SALDOS_KEY)
+    const ultimo = rows[rows.length - 1];
+    const s = carregarSaldosMensais(agency) || {};
+    acum.metaVop     = s.metaVopInicial    || Number(ultimo.metaVop)     || 0;
+    acum.descInicial = s.descInicial       || Number(ultimo.descInicial) || 0;
+    acum.arvInicial  = s.arvInicial        || Number(ultimo.arvInicial)  || 0;
+    acum.liqInicial  = s.liqInicial        || Number(ultimo.liqInicial)  || 0;
+    acum.quenteIni   = s.quenteInicial     || Number(ultimo.quenteInicial)|| 0;
+    // Saldos = Inicial − soma acumulada
+    acum.saldoDesc   = acum.descInicial - acum.somaDesc;
+    acum.saldoArv    = acum.arvInicial  - acum.somaAnt;
+    acum.saldoLiq    = acum.liqInicial  - acum.somaLiq;  // saldo restante de liquidação
+    acum.netAcum     = acum.somaNetDia;
+    return acum;
+  }
+
+  // Pré-preenche campos de cima — SÓ preenche se o campo estiver vazio
+  function setSeVazio(id, valor) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    // Só preenche se o campo estiver vazio ou for zero
+    if (el.value === '' || el.value === '0') {
+      if (valor !== undefined && valor !== null && valor !== 0 && valor !== '')
+        el.value = valor;
+    }
+  }
+
+  function preencherCima(agency) {
+    const s = carregarSaldosMensais(agency);
+    if (!s) return;
+
+    // Preenche APENAS campos vazios — nunca apaga o que foi digitado
+    setSeVazio('m-metaVop',   s.metaVopInicial);
+    setSeVazio('m-quenteIni', s.quenteInicial);
+    setSeVazio('m-descIni',   s.descInicial);
+    setSeVazio('m-arvIni',    s.arvInicial);
+    setSeVazio('m-liqIni',    s.liqInicial);
+    setSeVazio('m-netDiaAnt', s.netAcumulado);
+
+    calcTudo();
+  }
+
+  function salvarLocal(payload) {
+    let store = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+    // Remove lançamento anterior da mesma agência na mesma data
+    store = store.filter(r => !(r.agency === payload.agency && r.date === payload.date));
+    store.push(payload);
+    localStorage.setItem(STORE_KEY, JSON.stringify(store));
+  }
+
+  function carregarLocal(date) {
+    const store = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+    return store.filter(r => r.date === date);
+  }
+
+  const AGENCIAS_LIST = [
+    'Alphaville','Lapa','Osasco','Santana','Vila Maria','Sorocaba',
+    'Tatuape','Cidade Jardim','Santo Amaro','JK','Itaim','Sumaré'
+  ];
+
+  function montarPainelLocal(date) {
+    // Lê APENAS STORE_KEY (lançamentos da aba Lançar Produção) — 1 lançamento por agência
+    const storeRows = (JSON.parse(localStorage.getItem(STORE_KEY) || '[]')).filter(r => r.date === date);
+
+    // Um registro por agência (último enviado)
+    const byAgency = {};
+    storeRows.forEach(r => {
+      byAgency[r.agency] = r; // sobrescreve — pega o mais recente
+    });
+
+    const zero = {
+      metaVop:0, descInicial:0, quenteInicial:0, arvInicial:0, liqInicial:0,
+      prodDesconto:0, antDemais:0, longoPrazo:0, liquidacaoTotal:0,
+      netDiaAnterior:0, vopDia:0, netDia:0, netAcumulado:0
+    };
+
+    const agencias = AGENCIAS_LIST.map(ag => {
+      if (byAgency[ag]) {
+        const r = byAgency[ag];
+        const netDiaAnt = Number(r.netDiaAnterior) || 0;
+        return { ...r, agency: ag, netAcumulado: netDiaAnt + (Number(r.netDia)||0), enviado: true };
+      }
+      return { ...zero, agency: ag, enviado: false };
+    });
+
+    const pendentes     = agencias.filter(a => !a.enviado).map(a => a.agency);
+    const totalEnviadas = agencias.filter(a => a.enviado).length;
+    const soma = c => agencias.reduce((s,a) => s + (Number(a[c]) || 0), 0);
+
+    const regional = {
+      agency:          'Regional',
+      metaVop:         soma('metaVop'),
+      descInicial:     soma('descInicial'),
+      quenteInicial:   soma('quenteInicial'),
+      arvInicial:      soma('arvInicial'),
+      liqInicial:      soma('liqInicial'),
+      netAtivos:       soma('netAtivos'),
+      prodDesconto:    soma('prodDesconto'),
+      antDemais:       soma('antDemais'),
+      longoPrazo:      soma('longoPrazo'),
+      liquidacaoTotal: soma('liquidacaoTotal'),
+      netDiaAnterior:  soma('netDiaAnterior'),
+      vopDia:          soma('vopDia'),
+      netDia:          soma('netDia'),
+      netAcumulado:    soma('netAcumulado'),
+      completo: pendentes.length === 0
+    };
+
+    return { agencias, regional, pendentes, totalEnviadas, date };
+  }
+
+  function carregarPainel() {
+    const date = document.getElementById('painel-date').value;
+    const [y,m,d] = date.split('-');
+    document.getElementById('lbl-date-painel').textContent = `${d}/${m}/${y}`;
+    document.getElementById('last-update').textContent = 'Atualizando...';
+
+    // Tenta buscar do servidor; se não houver URL, usa localStorage
+    if (SCRIPT_URL && SCRIPT_URL !== 'COLE_AQUI_A_URL_DO_SEU_APPS_SCRIPT') {
+      fetch(`${SCRIPT_URL}?date=${date}`)
+        .then(r => r.json())
+        .then(renderPainel)
+        .catch(() => {
+          // Fallback para localStorage
+          renderPainel(montarPainelLocal(date));
+          document.getElementById('last-update').textContent = 'Dados locais — ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+        });
+    } else {
+      // Usa localStorage diretamente
+      renderPainel(montarPainelLocal(date));
+            document.getElementById('last-update').textContent = 'Dados locais — ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+    }
+  }
+
+  function calcSaldos(a) {
+    const realVop     = a.prodDesconto + a.antDemais + a.longoPrazo;
+    const saldoDesc   = a.descInicial   - a.prodDesconto;
+    const saldoQuente = a.quenteInicial;
+    const saldoArv    = a.arvInicial    - a.antDemais;
+    const saldoLiq    = a.liqInicial    - a.liquidacaoTotal; // liqIni − soma liq acumulada
+
+    // Net Acumulado = Saldo Liq + Net Dia (atual)
+    const netAtual    = Number(a.netDiaAnterior) || 0;
+    const netAcum     = saldoLiq + netAtual;
+
+    // Net Projetado = Net Acumulado + Saldo Desc + Saldo ARV + Quente
+    const netProj     = netAcum + saldoDesc + saldoArv + saldoQuente;
+
+    return { realVop, saldoDesc, saldoQuente, saldoArv, saldoLiq, netAcum, netProj };
+  }
+
+  // ── Quartis Regionais ───────────────────────────────────
+  const CORTES_GER_REG = [25000000, 19000000, 13000000];
+  const CORTES_AG_REG  = [50000000, 39000000, 24000000];
+
+  function quartilGer(vop) {
+    const v = Math.abs(Number(vop)||0);
+    if (v > 25082) return 1;
+    if (v > 18809) return 2;
+    if (v > 12748) return 3;
+    return 4;
+  }
+
+  function renderQuartisRegional(agencias) {
+    const date = document.getElementById('painel-date').value;
+    const mes  = date ? date.slice(0,7) : new Date().toISOString().slice(0,7);
+
+    // ── Quartil Gerentes — usa EXATAMENTE a mesma lógica do detalhamento mensal ──
+    const prodStore    = JSON.parse(localStorage.getItem(PROD_KEY)  || '[]');
+    const diarStore    = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+    const prodMes      = prodStore.filter(r => r.date && r.date.startsWith(mes));
+    const diarMes      = diarStore.filter(r => r.date && r.date.startsWith(mes));
+
+    const calcPipeQ    = r => (Number(r.prodDesconto)||0)+(Number(r.antDemais)||0)+(Number(r.longoPrazo)||0);
+
+    const byGer        = {};
+    const seenQ        = {};
+    const seenGerDateQ = {};
+
+    const addGer = (agency, ger, pipe, date, fonte) => {
+      const dk = fonte + '||' + date + '||' + agency + '||' + ger;
+      if (seenQ[dk]) return;
+      seenQ[dk] = true;
+      // Acumula VOP por gerente (soma todos os dias do mês)
+      if (!byGer[ger]) byGer[ger] = { nome: ger, vop: 0 };
+      byGer[ger].vop += Number(pipe)||0;
+    };
+
+    // PROD_KEY — prioridade
+    prodMes.forEach(r => {
+      const ger  = r.gerente || r.agency;
+      const pipe = calcPipeQ(r) || Number(r.pipe)||0;
+      addGer(r.agency, ger, pipe, r.date, 'prod');
+      seenGerDateQ[r.date + '||' + r.agency + '||' + ger] = true;
+    });
+
+    // STORE_KEY — só se não há no PROD_KEY para mesmo dia
+    diarMes.forEach(r => {
+      const ger = r.gerente;
+      if (!ger || ger === r.agency) return;
+      if (seenGerDateQ[r.date + '||' + r.agency + '||' + ger]) return;
+      addGer(r.agency, ger, calcPipeQ(r), r.date, 'diar');
+    });
+
+    const gerVops = Object.values(byGer);
+    // Debug: mostrar valores calculados
+    _renderQuartilRegional('quartil-ger-bars', 'quartil-ger-table', gerVops, CORTES_GER_REG, 'gerente');
+
+    // ── Quartil Agências — VOP acumulado do mês por agência ──
+    const byAg = {};
+    const seenAg = {};
+    [...prodMes, ...diarMes].forEach(r => {
+      const dk = r.date + '||' + r.agency;
+      if (seenAg[dk]) return;
+      seenAg[dk] = true;
+      if (!byAg[r.agency]) byAg[r.agency] = { nome: r.agency, vop: 0 };
+      byAg[r.agency].vop += calcPipeQ(r) || Number(r.pipe)||0;
+    });
+    const agVops = Object.values(byAg);
+    _renderQuartilRegional('quartil-ag-bars', 'quartil-ag-table', agVops, CORTES_AG_REG, 'agência');
+  }
+
+  function _renderQuartilRegional(barsId, tableId, items, cortes, tipo) {
+    const barsEl  = document.getElementById(barsId);
+    const tableEl = document.getElementById(tableId);
+    if (!barsEl || !tableEl) return;
+
+    const counts = [0,0,0,0];
+    const nomes  = [[],[],[],[]];
+    items.forEach(i => {
+      const v = Math.abs(Number(i.vop)||0);
+      const q = v > cortes[0] ? 0 : v > cortes[1] ? 1 : v > cortes[2] ? 2 : 3;
+      counts[q]++;
+      nomes[q].push(i.nome + ': ' + fmtBRL(v));
+    });
+    const maxC = Math.max(...counts, 1);
+
+    barsEl.innerHTML = counts.map((cnt,i) => {
+      const h = Math.max(Math.round((cnt/maxC)*80), cnt>0?14:3);
+      const cls = ['q1','q2','q3','q4'][i];
+      return `<div class="q-bar-wrap">
+        <div class="q-bar ${cls}" style="height:${h}px">${cnt>0?`<span>${cnt}</span>`:''}</div>
+        <div class="q-bar-lbl">Q${i+1}</div>
+      </div>`;
+    }).join('');
+
+    const fmtV = v => {
+      const n = Math.abs(v); 
+      return n>=1e6?'R$'+(n/1e6).toFixed(1)+'M':n>=1e3?'R$'+(n/1e3).toFixed(0)+'k':'R$'+n.toFixed(0);
+    };
+    // Lista detalhada por quartil
+    const listaQ = nomes || [[],[],[],[]];
+    tableEl.innerHTML = `<table class="q-corte-table">
+      <thead><tr>
+        <th style="color:#1a3a6e">Q1 &gt;${fmtV(cortes[0])}</th>
+        <th style="color:#0d7a5f">Q2 &gt;${fmtV(cortes[1])}</th>
+        <th style="color:#e67e22">Q3 &gt;${fmtV(cortes[2])}</th>
+        <th style="color:#b92d2d">Q4 ≤${fmtV(cortes[2])}</th>
+      </tr></thead>
+      <tbody><tr>
+        <td style="color:#1a3a6e;font-size:10px">${counts[0]} ${tipo}${counts[0]!==1?'s':''}<br>${listaQ[0].join('<br>') || '—'}</td>
+        <td style="color:#0d7a5f;font-size:10px">${counts[1]} ${tipo}${counts[1]!==1?'s':''}<br>${listaQ[1].join('<br>') || '—'}</td>
+        <td style="color:#e67e22;font-size:10px">${counts[2]} ${tipo}${counts[2]!==1?'s':''}<br>${listaQ[2].join('<br>') || '—'}</td>
+        <td style="color:#b92d2d;font-size:10px">${counts[3]} ${tipo}${counts[3]!==1?'s':''}<br>${listaQ[3].join('<br>') || '—'}</td>
+      </tr></tbody>
+    </table>`;
+  }
+
+  // Cortes de quartil para agências (VOP Ativos da foto)
+  const CORTES_AG = [50759, 39306, 23875];
+
+  function quartilAg(vop) {
+    const v = Math.abs(Number(vop)||0);
+    if (v > 50759) return 1;
+    if (v > 39306) return 2;
+    if (v > 23875) return 3;
+    return 4;
+  }
+
+  function renderAgCards(agencias) {
+    const grid = document.getElementById('ag-cards-grid');
+    if (!grid) return;
+    const circ = 2 * Math.PI * 13;
+
+    grid.innerHTML = agencias.map(a => {
+      const metaVop = Number(a.metaVop) || 0;
+      const realVop = (Number(a.prodDesconto)||0) + (Number(a.antDemais)||0) + (Number(a.longoPrazo)||0);
+      const pct     = metaVop > 0 ? Math.min((realVop / metaVop) * 100, 100) : 0;
+      const offset  = circ - (pct / 100) * circ;
+      const color   = pct >= 100 ? '#0d7a5f' : pct >= 70 ? '#e67e22' : '#b92d2d';
+      const q       = quartilAg(realVop);
+      const qLbl    = ['','Q1','Q2','Q3','Q4'][q];
+      const qCls    = ['','q1-ag','q2-ag','q3-ag','q4-ag'][q];
+      const qBadge  = ['','ag-q1','ag-q2','ag-q3','ag-q4'][q];
+      const cardCls = ['','q1-ag','q2-ag','q3-ag','q4-ag'][q];
+
+      // Relógio 2: projeção (onde deveria estar hoje)
+      const now       = new Date();
+      const diaHoje   = now.getDate();
+      const diasMes   = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+      const metaHoje  = metaVop > 0 ? (diaHoje / diasMes) * metaVop : 0;
+      const pctProj   = metaHoje > 0 ? Math.min((realVop / metaHoje) * 100, 150) : 0;
+      const offProj   = circ - (Math.min(pctProj,100) / 100) * circ;
+      const corProj   = pctProj >= 100 ? '#4ade80' : pctProj >= 80 ? '#facc15' : '#f87171';
+
+      if (!a.enviado) return `<div class="ag-card ag-pendente">
+        <div class="ag-nome">${a.agency}</div>
+        <div class="ag-clock-wrap">
+          <svg viewBox="0 0 32 32"><circle class="ag-clock-bg" cx="16" cy="16" r="13"/></svg>
+          <div class="ag-clock-text"><span class="ag-clock-pct" style="color:#aaa">—</span><span class="ag-clock-lbl">VOP</span></div>
+        </div>
+        <div class="ag-meta-val" style="color:#aaa">Pendente</div>
+      </div>`;
+
+      return `<div class="ag-card ${cardCls}">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <div class="ag-nome" style="font-size:10px">${a.agency}</div>
+          <span class="ag-badge ${qBadge}" style="font-size:9px">${qLbl}</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <!-- Relógio VOP realizado -->
+          <div style="flex:0 0 auto;text-align:center">
+            <div style="position:relative;width:44px;height:44px">
+              <svg width="44" height="44" viewBox="0 0 44 44" style="transform:rotate(-90deg)">
+                <circle cx="22" cy="22" r="17" fill="none" stroke="#f0f2f7" stroke-width="5"/>
+                <circle cx="22" cy="22" r="17" fill="none" stroke="${color}" stroke-width="5"
+                  stroke-linecap="round"
+                  stroke-dasharray="${circ} ${circ}"
+                  stroke-dashoffset="${offset}"/>
+              </svg>
+              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+                <span style="font-size:9px;font-weight:700;color:${color}">${Math.round(pct)}%</span>
+              </div>
+            </div>
+            <div style="font-size:8px;color:#aaa;margin-top:1px">Realizado</div>
+          </div>
+          <!-- Relógio projeção -->
+          <div style="flex:0 0 auto;text-align:center">
+            <div style="position:relative;width:44px;height:44px">
+              <svg width="44" height="44" viewBox="0 0 44 44" style="transform:rotate(-90deg)">
+                <circle cx="22" cy="22" r="17" fill="none" stroke="#f0f2f7" stroke-width="5"/>
+                <circle cx="22" cy="22" r="17" fill="none" stroke="${corProj}" stroke-width="5"
+                  stroke-linecap="round"
+                  stroke-dasharray="${circ} ${circ}"
+                  stroke-dashoffset="${offProj}"/>
+              </svg>
+              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+                <span style="font-size:9px;font-weight:700;color:${corProj}">${Math.round(pctProj)}%</span>
+              </div>
+            </div>
+            <div style="font-size:8px;color:#aaa;margin-top:1px">Dia ${diaHoje}</div>
+          </div>
+          <!-- Valores -->
+          <div style="flex:1;min-width:0">
+            <div style="font-size:11px;font-weight:700;color:${color};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${fmtBRL(realVop)}</div>
+            <div style="font-size:9px;color:#aaa">meta: ${fmtBRL(metaVop)}</div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderPainel(data) {
+    const { agencias, regional, pendentes, totalEnviadas } = data;
+    const now = new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+    document.getElementById('last-update').textContent = `Atualizado: ${now}`;
+
+    const pct = Math.round((totalEnviadas / TOTAL_AGENCIAS) * 100);
+    document.getElementById('p-fill').style.width  = pct + '%';
+    document.getElementById('p-label').textContent = `${totalEnviadas} de ${TOTAL_AGENCIAS} agências (${pct}%)`;
+    document.getElementById('p-pend').textContent  =
+      pendentes.length > 0 ? `⏳ Aguardando: ${pendentes.join(', ')}` : '✅ Todas enviaram!';
+
+    const dash = '—';
+
+    // ── Mensal ──
+    const tbM  = document.getElementById('tbody-mensal');
+    const rowsM = agencias.map(a => {
+      const s     = calcSaldos(a);
+      const badge = a.enviado ? '<span class="badge ok">✅</span>' : '<span class="badge pending">⏳</span>';
+      const dim   = a.enviado ? '' : 'style="color:#bbb"';
+      return `<tr ${dim}>
+        <td class="ag" ${a.enviado?'':'style="color:#bbb;background:#fafafa"'}>${a.agency}</td>
+        <td>${a.enviado ? fmtBRL(a.metaVop)         : dash}</td>
+        <td class="${a.enviado?'auto-val':''}">${a.enviado ? fmtBRL(s.realVop)      : dash}</td>
+        <td>${a.enviado ? fmtBRL(a.descInicial)     : dash}</td>
+        <td class="${a.enviado?'saldo '+cls(s.saldoDesc):''}">${a.enviado ? fmtBRL(s.saldoDesc)   : dash}</td>
+        <td>${a.enviado ? fmtBRL(a.quenteInicial)   : dash}</td>
+        <td class="${a.enviado?'saldo '+cls(s.saldoQuente):''}">${a.enviado ? fmtBRL(s.saldoQuente): dash}</td>
+        <td>${a.enviado ? fmtBRL(a.arvInicial)      : dash}</td>
+        <td class="${a.enviado?'saldo '+cls(s.saldoArv):''}">${a.enviado ? fmtBRL(s.saldoArv)    : dash}</td>
+        <td>${a.enviado ? fmtBRL(a.liqInicial)      : dash}</td>
+        <td class="${a.enviado?'saldo '+cls(s.saldoLiq):''}">${a.enviado ? fmtBRL(s.saldoLiq)    : dash}</td>
+        <td>${a.enviado ? fmtBRL(a.netDiaAnterior||0) : dash}</td>
+        <td class="${a.enviado?'net-acum '+cls(s.netAcum):''}">${a.enviado ? fmtBRL(s.netAcum) : dash}</td>
+        <td class="${a.enviado?'net-proj '+cls(s.netProj):''}">${a.enviado ? fmtBRL(s.netProj)   : dash}</td>
+        <td style="text-align:center">${badge}</td>
+      </tr>`;
+    });
+
+    const rs = calcSaldos(regional);
+    rowsM.push(`<tr class="reg">
+      <td class="ag">REGIONAL</td>
+      <td>${fmtBRL(regional.metaVop)}</td>
+      <td>${fmtBRL(rs.realVop)}</td>
+      <td>${fmtBRL(regional.descInicial)}</td>
+      <td class="${cls(rs.saldoDesc)}">${fmtBRL(rs.saldoDesc)}</td>
+      <td>${fmtBRL(regional.quenteInicial)}</td>
+      <td class="${cls(rs.saldoQuente)}">${fmtBRL(rs.saldoQuente)}</td>
+      <td>${fmtBRL(regional.arvInicial)}</td>
+      <td class="${cls(rs.saldoArv)}">${fmtBRL(rs.saldoArv)}</td>
+      <td>${fmtBRL(regional.liqInicial)}</td>
+      <td class="${cls(rs.saldoLiq)}">${fmtBRL(rs.saldoLiq)}</td>
+      <td>${fmtBRL(regional.netDiaAnterior||0)}</td>
+      <td class="${cls(regional.netAcumulado)}">${fmtBRL(regional.netAcumulado)}</td>
+      <td class="${cls(rs.netProj)}">${fmtBRL(rs.netProj)}</td>
+      <td style="text-align:center">${regional.completo
+        ? '<span class="badge ok">✅</span>'
+        : `<span class="badge pending">${totalEnviadas}/${TOTAL_AGENCIAS}</span>`}</td>
+    </tr>`);
+    tbM.innerHTML = rowsM.join('');
+
+    // ── Diário ──
+    // npMes: replica exatamente o netProjMes salvo no STORE_KEY (mesmo valor do Lançar Produção)
+    const _storeAll = JSON.parse(localStorage.getItem(STORE_KEY)||'[]');
+    const _paDate   = document.getElementById('painel-date').value;
+    function npMes(agency) {
+      const r = _storeAll.find(function(x){ return x.agency===agency && x.date===_paDate; });
+      return r ? Number(r.netProjMes)||0 : 0;
+    }
+    const tbD  = document.getElementById('tbody-diario');
+    const rowsD = agencias.map(a => {
+      const badge = a.enviado ? '<span class="badge ok">✅</span>' : '<span class="badge pending">⏳</span>';
+      const dim   = a.enviado ? '' : 'style="color:#bbb"';
+      var npv = a.enviado ? npMes(a.agency) : null;
+      var npvCls = npv !== null ? (npv >= 0 ? 'pos' : 'neg') : '';
+      var npvStr = npv !== null ? fmtBRL(npv) : dash;
+      return `<tr ${dim}>
+        <td class="ag" ${a.enviado?'':'style="color:#bbb;background:#fafafa"'}>${a.agency}</td>
+        <td>${a.enviado ? fmtBRL(a.prodDesconto)    : dash}</td>
+        <td>${a.enviado ? fmtBRL(a.antDemais)       : dash}</td>
+        <td>${a.enviado ? fmtBRL(a.longoPrazo)      : dash}</td>
+        <td>${a.enviado ? fmtBRL(a.liquidacaoTotal) : dash}</td>
+        <td class="${a.enviado?'auto-val':''}">${a.enviado ? fmtBRL(a.vopDia) : dash}</td>
+        <td class="net-dia ${a.enviado ? cls(a.netDia) : ''}">${a.enviado ? fmtBRL(a.netDia) : dash}</td>
+        <td class="${npvCls}" style="text-align:right;font-weight:700">${npvStr}</td>
+        <td style="text-align:center">${badge}</td>
+      </tr>`;
+    });
+
+    // Net Proj Mês regional = soma de todas as agências
+    const _saldosTodos = JSON.parse(localStorage.getItem(SALDOS_KEY)||'{}');
+    const _netProjReg  = agencias.filter(a=>a.enviado).reduce((s,a) => {
+      const _sAg = _saldosTodos[a.agency]||{};
+      const _ac  = calcAcumuladoMes(a.agency);
+      const _sd  = (Number(_sAg.descInicial)||0) - (_ac?_ac.somaDesc:0);
+      const _sa  = (Number(_sAg.arvInicial)||0)  - (_ac?_ac.somaAnt:0);
+      const _sq  = Number(_sAg.quenteInicial)||0;
+      const _na  = _ac?_ac.somaNetDia:0;
+      return s + _na + _sd + _sa + _sq;
+    }, 0);
+
+    rowsD.push(`<tr class="reg">
+      <td class="ag">REGIONAL</td>
+      <td>${fmtBRL(regional.prodDesconto)}</td>
+      <td>${fmtBRL(regional.antDemais)}</td>
+      <td>${fmtBRL(regional.longoPrazo)}</td>
+      <td>${fmtBRL(regional.liquidacaoTotal)}</td>
+      <td>${fmtBRL(regional.vopDia)}</td>
+      <td class="net-dia ${cls(regional.netDia)}">${fmtBRL(regional.netDia)}</td>
+      <td class="${cls(_netProjReg)}">${fmtBRL(_netProjReg)}</td>
+      <td style="text-align:center">${regional.completo
+        ? '<span class="badge ok">✅</span>'
+        : `<span class="badge pending">${totalEnviadas}/${TOTAL_AGENCIAS}</span>`}</td>
+    </tr>`);
+    tbD.innerHTML = rowsD.join('');
+
+    // Cards e quartis
+    renderAgCards(agencias);
+    renderQuartisRegional(agencias);
+  }
+
+  function editarHistLinha(btn) {
+    var tr = btn.closest('tr');
+    if (!tr) return;
+    // Trocar spans por inputs na linha
+    tr.querySelectorAll('.hval').forEach(function(s){ s.style.display='none'; });
+    tr.querySelectorAll('.hinput').forEach(function(i){ i.style.display='inline-block'; });
+    btn.style.display = 'none';
+    var saveBtn = tr.querySelector('.hbtn-save');
+    if (saveBtn) saveBtn.style.display = 'inline-block';
+    calcHistRowTr(tr);
+  }
+
+  function calcHistRowTr(el) { var tr = el.tagName==='TR' ? el : el.closest ? el.closest('tr') : el.parentNode.parentNode;
+    var inps = tr.querySelectorAll('.hinput');
+    var desc = parseFloat(inps[0]&&inps[0].value)||0;
+    var ant  = parseFloat(inps[1]&&inps[1].value)||0;
+    var lp   = parseFloat(inps[2]&&inps[2].value)||0;
+    var liq  = parseFloat(inps[3]&&inps[3].value)||0;
+    var pipe = desc+ant+lp, net = pipe+liq;
+    var pipeEl = tr.querySelector('.hpipe');
+    var netEl  = tr.querySelector('.hnet');
+    if (pipeEl) pipeEl.textContent = fmtBRL(pipe);
+    if (netEl)  { netEl.textContent = fmtBRL(net); netEl.className = 'hnet '+(net>=0?'pos':'neg'); }
+  }
+
+  function salvarHistLinha(btn) {
+    var tr      = btn.closest('tr');
+    var agency  = btn.getAttribute('data-agency');
+    var gerente = btn.getAttribute('data-gerente');
+    var date    = btn.getAttribute('data-date');
+    var inps    = tr.querySelectorAll('.hinput');
+    var desc = parseFloat(inps[0]&&inps[0].value)||0;
+    var ant  = parseFloat(inps[1]&&inps[1].value)||0;
+    var lp   = parseFloat(inps[2]&&inps[2].value)||0;
+    var liq  = parseFloat(inps[3]&&inps[3].value)||0;
+    var pipe = desc+ant+lp, net = pipe+liq;
+
+    var store = JSON.parse(localStorage.getItem(PROD_KEY)||'[]');
+    var idx = store.findIndex(function(r){ return r.date===date && r.agency===agency && r.gerente===gerente; });
+    if (idx>=0) {
+      store[idx] = Object.assign({}, store[idx], {prodDesconto:desc,antDemais:ant,longoPrazo:lp,liquidacaoTotal:liq,pipe:pipe,netProjetado:net});
+    } else {
+      store.push({agency:agency,gerente:gerente,date:date,prodDesconto:desc,antDemais:ant,longoPrazo:lp,liquidacaoTotal:liq,pipe:pipe,netProjetado:net});
+    }
+    localStorage.setItem(PROD_KEY, JSON.stringify(store));
+
+    // Volta visualização
+    tr.querySelectorAll('.hval').forEach(function(s,i){
+      var vals=[fmtBRL(desc),fmtBRL(ant),fmtBRL(lp),fmtBRL(liq)];
+      s.textContent=vals[i]||s.textContent;
+      s.style.display='inline';
+    });
+    tr.querySelectorAll('.hinput').forEach(function(i){ i.style.display='none'; });
+    btn.style.display = 'none';
+    var editBtn = tr.querySelector('.hbtn-edit');
+    if (editBtn) editBtn.style.display = 'inline-block';
+
+    showToast('✅ '+gerente+' — '+date+' atualizado!');
+    renderGerentesAgencia();
+    renderProdutividade();
+  }
+
+  function calcHistRow(hIdx) {
+    // legado — mantido por compatibilidade
+  }
+
+  function salvarHistLinhaLegado(hIdx, date, agency, gerente) {
+    // legado — não utilizado
+  }
+
+  function excluirHistLinha(date, agency, gerente) {
+    const modal = document.getElementById('del-modal');
+    const msg   = document.getElementById('del-modal-msg');
+    const btn   = document.getElementById('del-modal-btn');
+    const [y,m,d] = date.split('-');
+    msg.innerHTML = 'Excluir lançamento de <strong>' + gerente + '</strong> em <strong>' + d+'/'+m+'/'+y + '</strong>?';
+    btn.onclick = function() {
+      modal.style.display = 'none';
+      let store = JSON.parse(localStorage.getItem(PROD_KEY) || '[]');
+      store = store.filter(r => !(r.date === date && r.agency === agency && r.gerente === gerente));
+      localStorage.setItem(PROD_KEY, JSON.stringify(store));
+      showToast('🗑 Removido!');
+      renderGerentesAgencia();
+      renderProdutividade();
+    };
+    modal.style.display = 'flex';
+  }
+
+  function inspecionarDados() {
+    const date = document.getElementById('painel-date').value;
+    const mes  = date ? date.slice(0,7) : new Date().toISOString().slice(0,7);
+    const prod = JSON.parse(localStorage.getItem(PROD_KEY) || '[]').filter(r => r.date && r.date.startsWith(mes));
+    const diar = JSON.parse(localStorage.getItem(STORE_KEY) || '[]').filter(r => r.date && r.date.startsWith(mes));
+    
+    let msg = '=== PROD_KEY (aba Produtividade) ===\n';
+    prod.forEach(r => {
+      const pipe = (Number(r.prodDesconto)||0)+(Number(r.antDemais)||0)+(Number(r.longoPrazo)||0);
+      msg += r.gerente + ' | ' + r.agency + ' | ' + r.date + '\n';
+      msg += '  desc=' + r.prodDesconto + ' ant=' + r.antDemais + ' lp=' + r.longoPrazo + '\n';
+      msg += '  pipe calculado=' + pipe + ' | r.pipe=' + r.pipe + '\n\n';
+    });
+    msg += '=== STORE_KEY (aba Lançar Produção) ===\n';
+    diar.forEach(r => {
+      const pipe = (Number(r.prodDesconto)||0)+(Number(r.antDemais)||0)+(Number(r.longoPrazo)||0);
+      msg += r.agency + ' | ger=' + (r.gerente||'—') + ' | ' + r.date + '\n';
+      msg += '  desc=' + r.prodDesconto + ' ant=' + r.antDemais + ' lp=' + r.longoPrazo + '\n';
+      msg += '  vopDia=' + r.vopDia + ' | pipe calc=' + pipe + '\n\n';
+    });
+    alert(msg);
+  }
+
+  function salvarGerenteProd(btn) {
+    var tr  = btn.parentNode.parentNode;
+    var ag  = btn.getAttribute('data-agency')  || document.getElementById('prod-agency').value;
+    var ger = btn.getAttribute('data-gerente');
+    var dt  = btn.getAttribute('data-date')    || document.getElementById('prod-data').value;
+    if (!dt)  { showToast('Selecione a data!', true); return; }
+    if (!ag)  { showToast('Selecione a agência!', true); return; }
+    if (!ger) { showToast('Gerente não encontrado!', true); return; }
+    var inp = tr.getElementsByTagName('input');
+    var nums = [];
+    for (var i = 0; i < inp.length; i++) { if (inp[i].type === 'number') nums.push(inp[i]); }
+    var d = parseFloat(nums[0] ? nums[0].value : 0) || 0;
+    var a = parseFloat(nums[1] ? nums[1].value : 0) || 0;
+    var l = parseFloat(nums[2] ? nums[2].value : 0) || 0;
+    var q = parseFloat(nums[3] ? nums[3].value : 0) || 0;
+    var pipe = d + a + l;
+    var net  = pipe + q;
+    var pay  = { agency:ag, gerente:ger, date:dt, prodDesconto:d, antDemais:a, longoPrazo:l, liquidacaoTotal:q, pipe:pipe, netProjetado:net };
+    var store = JSON.parse(localStorage.getItem('lancamentos_prod_gerente') || '[]');
+    store = store.filter(function(r) { return !(r.agency===ag && r.gerente===ger && r.date===dt); });
+    store.push(pay);
+    localStorage.setItem('lancamentos_prod_gerente', JSON.stringify(store));
+    tr.style.background = '#e8f5f0';
+    showToast('✅ ' + ger + ' salvo!');
+    renderGerentesAgencia();
+    renderProdutividade();
+  }
+
+  // ══ FUNÇÕES GLOBAIS — acessíveis por onclick no HTML gerado ══
+  window.salvarGerente = function(btn) {
+    try {
+      var tr      = btn.parentNode.parentNode; // <td> -> <tr>
+      var agency  = btn.getAttribute('data-agency')  || document.getElementById('prod-agency').value;
+      var gerente = btn.getAttribute('data-gerente');
+      var date    = btn.getAttribute('data-date')    || document.getElementById('prod-data').value;
+
+      if (!date)    { alert('Preencha a data!'); return; }
+      if (!agency)  { alert('Selecione a agência!'); return; }
+      if (!gerente) { alert('Gerente não identificado!'); return; }
+
+      // Lê inputs pela classe CSS
+      var desc = 0, ant = 0, lp = 0, liq = 0;
+      var inputs = tr.getElementsByTagName('input');
+      var cols = [];
+      for (var i = 0; i < inputs.length; i++) {
+        if (inputs[i].type === 'number') cols.push(inputs[i]);
+      }
+      if (cols[0]) desc = parseFloat(cols[0].value) || 0;
+      if (cols[1]) ant  = parseFloat(cols[1].value) || 0;
+      if (cols[2]) lp   = parseFloat(cols[2].value) || 0;
+      if (cols[3]) liq  = parseFloat(cols[3].value) || 0;
+
+      var pipe = desc + ant + lp;
+      var net  = pipe + liq;
+      var payload = { agency:agency, gerente:gerente, date:date, prodDesconto:desc, antDemais:ant, longoPrazo:lp, liquidacaoTotal:liq, pipe:pipe, netProjetado:net };
+
+      var store = JSON.parse(localStorage.getItem('lancamentos_prod_gerente') || '[]');
+      store = store.filter(function(r){ return !(r.agency===agency && r.gerente===gerente && r.date===date); });
+      store.push(payload);
+      localStorage.setItem('lancamentos_prod_gerente', JSON.stringify(store));
+
+      tr.style.background = '#e8f5f0';
+      btn.textContent = '✅ Salvo';
+      setTimeout(function(){ btn.textContent = 'Salvar'; tr.style.background=''; }, 2000);
+
+      renderProdutividade();
+      renderGerentesAgencia();
+    } catch(e) {
+      alert('Erro: ' + e.message + '\nLinha: ' + e.lineNumber);
+    }
+  };
+
+  window.removerGerente = function(btn) {
+    const agency  = btn.getAttribute('data-agency');
+    const gerente = btn.getAttribute('data-gerente');
+    const date    = btn.getAttribute('data-date');
+    const modal   = document.getElementById('del-modal');
+    const msg     = document.getElementById('del-modal-msg');
+    const mbtn    = document.getElementById('del-modal-btn');
+    msg.innerHTML = 'Remover lançamento de <strong>' + gerente + '</strong> em ' + date + '?<br><small style="color:#888">Remove da produção diária e do lançamento por gerente.</small>';
+    mbtn.onclick  = function() {
+      modal.style.display = 'none';
+      excluirSincronizado(agency, date, gerente);
+      showToast('🗑 Removido de ambas as abas!');
+      renderGerentesAgencia();
+      renderProdutividade();
+      };
+    modal.style.display = 'flex';
+  };
+
+  const TRIM_KEY = 'historico_trimestre';
+
+  function abrirNovoMes() {
+    const mes = new Date().toISOString().slice(0,7);
+    const modal = document.getElementById('del-modal');
+    const msg   = document.getElementById('del-modal-msg');
+    const btn   = document.getElementById('del-modal-btn');
+    msg.innerHTML = 'Iniciar <strong>Novo Mês</strong>?<br><br>' +
+      'Os dados de <strong>' + mes + '</strong> serão arquivados no Trimestre e os campos serão limpos para o novo mês.<br><br>' +
+      '<span style="color:#e67e22;font-size:11px">Esta ação não pode ser desfeita.</span>';
+    btn.style.background = '#e67e22';
+    btn.textContent = 'Confirmar Novo Mês';
+    btn.onclick = function() {
+      modal.style.display = 'none';
+      btn.style.background = '';
+      btn.textContent = 'Excluir';
+      fecharMes(mes);
+    };
+    modal.style.display = 'flex';
+  }
+
+  function fecharMes(mes) {
+    // Arquiva no TRIM_KEY
+    const historico = JSON.parse(localStorage.getItem(TRIM_KEY) || '{}');
+    historico[mes] = {
+      lancamentos: JSON.parse(localStorage.getItem(STORE_KEY) || '[]').filter(r => r.date && r.date.startsWith(mes)),
+      prodGerentes: JSON.parse(localStorage.getItem(PROD_KEY) || '[]').filter(r => r.date && r.date.startsWith(mes)),
+      saldos: JSON.parse(localStorage.getItem(SALDOS_KEY) || '{}'),
+      archivedAt: new Date().toISOString()
+    };
+    localStorage.setItem(TRIM_KEY, JSON.stringify(historico));
+
+    // Limpa dados do mês
+    let store = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+    store = store.filter(r => !r.date || !r.date.startsWith(mes));
+    localStorage.setItem(STORE_KEY, JSON.stringify(store));
+
+    let prod = JSON.parse(localStorage.getItem(PROD_KEY) || '[]');
+    prod = prod.filter(r => !r.date || !r.date.startsWith(mes));
+    localStorage.setItem(PROD_KEY, JSON.stringify(prod));
+
+    localStorage.removeItem(SALDOS_KEY);
+
+    showToast('✅ Mês ' + mes + ' arquivado! Campos limpos para o novo mês.');
+    clearForm();
+    atualizarDashTotal(new Date().toISOString().slice(0,10));
+  }
+
+  function renderTrimestre() {
+    const sel = document.getElementById('trim-mes-sel').value;
+    const cont = document.getElementById('trim-content');
+    if (!sel) { cont.innerHTML = '<div style="color:#aaa;font-size:12px;text-align:center;padding:16px">Selecione um mês</div>'; return; }
+
+    const historico = JSON.parse(localStorage.getItem(TRIM_KEY) || '{}');
+    const dados = historico[sel];
+    if (!dados) { cont.innerHTML = '<div style="color:#aaa;text-align:center;padding:16px">Sem dados para ' + sel + '</div>'; return; }
+
+    const lanc = dados.lancamentos || [];
+    const prod = dados.prodGerentes || [];
+
+    // Totais por agência
+    const byAg = {};
+    lanc.forEach(function(r) {
+      if (!byAg[r.agency]) byAg[r.agency] = { vop:0, net:0, dias:0 };
+      byAg[r.agency].vop += (Number(r.prodDesconto)||0)+(Number(r.antDemais)||0)+(Number(r.longoPrazo)||0);
+      byAg[r.agency].net += Number(r.netDia)||0;
+      byAg[r.agency].dias++;
+    });
+
+    // Totais por gerente
+    const byGer = {};
+    prod.forEach(function(r) {
+      if (!byGer[r.gerente]) byGer[r.gerente] = { vop:0, net:0, dias:0, agency:r.agency };
+      byGer[r.gerente].vop += Number(r.pipe)||0;
+      byGer[r.gerente].net += Number(r.netProjetado)||0;
+      byGer[r.gerente].dias++;
+    });
+
+    var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">';
+
+    // Tabela agências
+    html += '<div><div style="font-size:11px;font-weight:700;color:#1a3a6e;margin-bottom:8px">🏦 Por Agência</div><div class="tbl-wrap"><table><thead><tr><th class="left">Agência</th><th>VOP</th><th>Net</th><th>Dias</th></tr></thead><tbody>';
+    var agKeys = Object.keys(byAg);
+    var totVopAg = 0, totNetAg = 0;
+    agKeys.sort().forEach(function(ag) {
+      var r = byAg[ag];
+      totVopAg += r.vop; totNetAg += r.net;
+      var nc = r.net >= 0 ? 'pos' : 'neg';
+      html += '<tr><td class="ag">'+ag+'</td><td style="text-align:right">'+fmtBRL(r.vop)+'</td><td class="'+nc+'" style="text-align:right">'+fmtBRL(r.net)+'</td><td style="text-align:center">'+r.dias+'</td></tr>';
+    });
+    html += '<tr style="background:#1a3a6e;color:#fff;font-weight:700"><td>TOTAL</td><td style="text-align:right">'+fmtBRL(totVopAg)+'</td><td style="text-align:right;color:'+(totNetAg>=0?'#90ee90':'#ff9999')+'">'+fmtBRL(totNetAg)+'</td><td></td></tr>';
+    html += '</tbody></table></div></div>';
+
+    // Tabela gerentes
+    html += '<div><div style="font-size:11px;font-weight:700;color:#1a3a6e;margin-bottom:8px">👤 Por Gerente</div><div class="tbl-wrap"><table><thead><tr><th class="left">Gerente</th><th>VOP</th><th>Net</th><th>Dias</th></tr></thead><tbody>';
+    var gerKeys = Object.keys(byGer);
+    var totVopGer = 0, totNetGer = 0;
+    gerKeys.sort(function(a,b){return byGer[b].vop-byGer[a].vop;}).forEach(function(ger) {
+      var r = byGer[ger];
+      totVopGer += r.vop; totNetGer += r.net;
+      var nc = r.net >= 0 ? 'pos' : 'neg';
+      var q = r.vop>25000000?'Q1':r.vop>19000000?'Q2':r.vop>13000000?'Q3':'Q4';
+      var qc = r.vop>25000000?'#1a3a6e':r.vop>19000000?'#0d7a5f':r.vop>13000000?'#e67e22':'#b92d2d';
+      html += '<tr><td class="ag">'+ger+' <span style="background:'+qc+';color:#fff;font-size:9px;padding:1px 5px;border-radius:10px">'+q+'</span></td><td style="text-align:right">'+fmtBRL(r.vop)+'</td><td class="'+nc+'" style="text-align:right">'+fmtBRL(r.net)+'</td><td style="text-align:center">'+r.dias+'</td></tr>';
+    });
+    html += '<tr style="background:#1a3a6e;color:#fff;font-weight:700"><td>TOTAL</td><td style="text-align:right">'+fmtBRL(totVopGer)+'</td><td style="text-align:right;color:'+(totNetGer>=0?'#90ee90':'#ff9999')+'">'+fmtBRL(totNetGer)+'</td><td></td></tr>';
+    html += '</tbody></table></div></div>';
+
+    html += '</div>';
+    cont.innerHTML = html;
+  }
+
+  function popularSelectTrimestre() {
+    const sel = document.getElementById('trim-mes-sel');
+    if (!sel) return;
+    const historico = JSON.parse(localStorage.getItem(TRIM_KEY) || '{}');
+    const meses = Object.keys(historico).sort().reverse();
+    sel.innerHTML = '<option value="">Selecione o mês</option>';
+    meses.forEach(function(m) {
+      var opt = document.createElement('option');
+      opt.value = m; opt.textContent = m;
+      sel.appendChild(opt);
+    });
+  }
+
+  function renderMiniDashNetProj() {
+    const div = document.getElementById('mini-dash-netproj');
+    if (!div) return;
+
+    const agSel = document.getElementById('prod-agency');
+    const ag    = agSel ? agSel.value : '';
+
+    if (!ag) {
+      div.innerHTML = '';
+      return;
+    }
+
+    const mes    = (document.getElementById('prod-mes') ? document.getElementById('prod-mes').value : '') || new Date().toISOString().slice(0,7);
+    const saldos = JSON.parse(localStorage.getItem(SALDOS_KEY) || '{}');
+    const acum   = calcAcumuladoMes(ag, mes);
+    const sAg    = saldos[ag] || {};
+
+    // VOP vs Meta — usa meta do SALDOS_KEY + VOP acumulado
+    const metaVop  = Number(sAg.metaVopInicial) || 0;
+    const realVop  = acum ? acum.somaVop : 0;
+    const pct      = metaVop > 0 ? Math.min((realVop / metaVop) * 100, 100) : 0;
+    const corVop   = pct >= 100 ? '#0d7a5f' : pct >= 70 ? '#e67e22' : '#b92d2d';
+    const circ     = 2 * Math.PI * 18;
+    const offset   = circ - (pct / 100) * circ;
+
+    // Net Projetado — calcula mesmo sem acum usando saldos iniciais
+    var netProj = 0;
+    const descIni  = Number(sAg.descInicial)   || 0;
+    const arvIni   = Number(sAg.arvInicial)    || 0;
+    const liqIni   = Number(sAg.liqInicial)    || 0;
+    const quente   = Number(sAg.quenteInicial) || 0;
+    const netAtual = Number(sAg.netAcumulado)  || 0;
+    if (acum) {
+      const saldoDesc = descIni - acum.somaDesc;
+      const saldoArv  = arvIni  - acum.somaAnt;
+      const saldoLiq  = liqIni  - acum.somaLiq;
+      const netAcum   = saldoLiq + acum.somaNetDia;
+      netProj = netAcum + saldoDesc + saldoArv + quente;
+    } else if (metaVop > 0 || descIni > 0) {
+      // Sem lançamentos ainda — mostra projeção baseada nos saldos iniciais
+      netProj = netAtual + descIni + arvIni + quente + liqIni;
+    } else {
+      // Nenhum dado — não mostra
+      div.innerHTML = '<div style="color:#aaa;font-size:11px;padding:8px">Preencha o quadro mensal da agência para ver a projeção.</div>';
+      return;
+    }
+    const corNet = netProj >= 0 ? '#0d7a5f' : '#b92d2d';
+    const bgNet  = netProj >= 0 ? '#e8f5f0' : '#fde8e8';
+
+    div.innerHTML =
+      '<div style="display:flex;align-items:center;gap:16px;background:#fff;border:1px solid #e0e4ec;border-radius:10px;padding:12px 18px;flex-wrap:wrap">' +
+
+      // Relógio VOP
+      '<div style="display:flex;align-items:center;gap:10px">' +
+        '<div style="position:relative;width:50px;height:50px">' +
+          '<svg width="50" height="50" viewBox="0 0 44 44" style="transform:rotate(-90deg)">' +
+            '<circle cx="22" cy="22" r="18" fill="none" stroke="#f0f2f7" stroke-width="5"/>' +
+            '<circle cx="22" cy="22" r="18" fill="none" stroke="' + corVop + '" stroke-width="5" stroke-linecap="round" stroke-dasharray="' + circ + ' ' + circ + '" stroke-dashoffset="' + offset + '"/>' +
+          '</svg>' +
+          '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column">' +
+            '<span style="font-size:10px;font-weight:700;color:' + corVop + '">' + Math.round(pct) + '%</span>' +
+          '</div>' +
+        '</div>' +
+        '<div>' +
+          '<div style="font-size:10px;color:#888">VOP vs Meta</div>' +
+          '<div style="font-size:12px;font-weight:700;color:#1a3a6e">' + fmtBRL(realVop) + '</div>' +
+          '<div style="font-size:10px;color:#aaa">meta: ' + fmtBRL(metaVop) + '</div>' +
+        '</div>' +
+      '</div>' +
+
+      // Separador
+      '<div style="width:1px;height:50px;background:#e0e4ec"></div>' +
+
+      // Net Proj Mês
+      '<div style="background:' + bgNet + ';border-radius:8px;padding:8px 14px">' +
+        '<div style="font-size:10px;color:#888;margin-bottom:2px">Net Proj. Mês</div>' +
+        '<div style="font-size:16px;font-weight:700;color:' + corNet + '">' + fmtBRL(netProj) + '</div>' +
+        '<div style="font-size:9px;color:' + corNet + '">' + (netProj >= 0 ? '▲ positivo' : '⚠️ negativo') + '</div>' +
+      '</div>' +
+
+      '</div>';
+  }
+
+  function calcNetProjMesRegional(mesParam) {
+    // Net Projetado = Net Acumulado + Saldo Desc + Saldo ARV + Quente
+    const mes = mesParam || new Date().toISOString().slice(0,7);
+    const agencias = ['Alphaville','Lapa','Osasco','Santana','Vila Maria','Sorocaba',
+                      'Tatuape','Cidade Jardim','Santo Amaro','JK','Itaim','Sumaré'];
+    return agencias.reduce(function(total, agency) {
+      const acum = calcAcumuladoMes(agency, mes);
+      if (!acum) return total;
+      // Net Acumulado = Saldo Liq + Net Atual (netDiaAnterior)
+      // Saldo Liq = liqInicial - somaLiq
+      const netAtual  = acum.somaNetDia;   // soma net dia do mês
+      const saldoLiq  = acum.saldoLiq;     // liqInicial - somaLiq
+      const netAcum   = saldoLiq + netAtual;
+      // Net Projetado = Net Acumulado + Saldo Desc + Saldo ARV + Quente
+      const netProj   = netAcum + acum.saldoDesc + acum.saldoArv + acum.quenteIni;
+      return total + netProj;
+    }, 0);
+  }
+
+  function showToast(msg, isError) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show' + (isError ? ' error' : '');
+    setTimeout(() => { t.className = 'toast'; }, 4000);
+  }
+</script>
+</body>
+</html>
