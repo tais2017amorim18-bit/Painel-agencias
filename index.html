@@ -2898,6 +2898,9 @@
     if (tab === 'lancamento') {
       tabs[0].classList.add('active');
       document.getElementById('page-lancamento').classList.add('active');
+      recarregarBanco().then(() => {
+        if (document.getElementById('agency-select').value) syncNomes();
+      });
     } else if (tab === 'gg') {
       tabs[1].classList.add('active');
       document.getElementById('page-gg').classList.add('active');
@@ -3309,20 +3312,25 @@
     document.getElementById('lbl-date-painel').textContent = `${d}/${m}/${y}`;
     document.getElementById('last-update').textContent = 'Atualizando...';
 
-    // Tenta buscar do servidor; se não houver URL, usa localStorage
+    // Sempre recarrega do Supabase antes de renderizar
+    recarregarBanco().then(() => {
+      renderPainel(montarPainelLocal(date));
+      document.getElementById('last-update').textContent = 'Banco de dados — ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+    });
+
+    // Mantém fallback para Apps Script se configurado
     if (SCRIPT_URL && SCRIPT_URL !== 'COLE_AQUI_A_URL_DO_SEU_APPS_SCRIPT') {
       fetch(`${SCRIPT_URL}?date=${date}`)
         .then(r => r.json())
         .then(renderPainel)
         .catch(() => {
-          // Fallback para localStorage
           renderPainel(montarPainelLocal(date));
-          document.getElementById('last-update').textContent = 'Dados locais — ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+          document.getElementById('last-update').textContent = 'Banco de dados — ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
         });
     } else {
       // Usa localStorage diretamente
       renderPainel(montarPainelLocal(date));
-            document.getElementById('last-update').textContent = 'Dados locais — ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+            document.getElementById('last-update').textContent = 'Banco de dados — ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
     }
   }
 
