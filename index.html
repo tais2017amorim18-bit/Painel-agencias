@@ -1211,7 +1211,7 @@
   // Global variables
   let today = new Date().toISOString().split('T')[0];
 
-  function _initAppUI() {
+
   // ── Produtividade — Tabela de preenchimento por gerente ──
   const PROD_KEY = 'lancamentos_prod_gerente';
 
@@ -2245,6 +2245,8 @@
   const STORE_KEY      = 'lancamentos_agencias';
   const SALDOS_KEY     = 'saldos_mensais_agencias';
 
+
+  function _initAppUI() {
   today = new Date().toISOString().split('T')[0];
 
   document.getElementById('ref-date').value    = today;
@@ -2295,6 +2297,8 @@
       netAcumulado:   netDiaAnt|| exist.netAcumulado,
     });
   }
+  } // end _initAppUI
+
 
   function resetarMes(e) {
     if (e) e.preventDefault();
@@ -4169,7 +4173,8 @@
     }, 0);
   }
 
-  } // end _initAppUI
+
+
 
   function showToast(msg, isError) {
     const t = document.getElementById('toast');
