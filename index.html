@@ -1,3 +1,48 @@
+<!--
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                    ⚠️  INSTRUÇÕES CRÍTICAS PARA O CLAUDE  ⚠️                  ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  ESTE ARQUIVO POSSUI UMA ARQUITETURA DE BANCO DE DADOS ESPECÍFICA.          ║
+║  NÃO ALTERE AS SEGUINTES PARTES SEM AUTORIZAÇÃO EXPLÍCITA DO USUÁRIO:       ║
+║                                                                              ║
+║  1. CAMADA SUPABASE (lsGetItem / lsSetItem / supaSet / initApp)             ║
+║     → Toda leitura/escrita de dados passa por esta camada.                  ║
+║     → NUNCA substitua por localStorage diretamente.                         ║
+║     → NUNCA remova ou reescreva as funções lsGetItem, lsSetItem, lsSet.     ║
+║                                                                              ║
+║  2. CREDENCIAIS SUPABASE                                                     ║
+║     → SUPA_URL = https://fdefnukjulrhquzmufke.supabase.co                   ║
+║     → SUPA_KEY = sb_publishable_v8PxB_fIUgVLgT4MoNistQ_OjykbD5O            ║
+║     → Projeto: AGENCIAS (banco exclusivo desta aplicação)                   ║
+║     → NUNCA troque para o banco antigo (umiwqmslqalanjwupdlh).              ║
+║                                                                              ║
+║  3. TELA DE LOGIN                                                            ║
+║     → A senha é validada no Supabase (tabela app_config).                   ║
+║     → NUNCA coloque a senha hardcoded no código HTML.                       ║
+║     → NUNCA remova a tela de login.                                         ║
+║                                                                              ║
+║  4. PADRÃO DE MODIFICAÇÃO SEGURO                                             ║
+║     → Se precisar adicionar novas funcionalidades que salvam dados,         ║
+║       use SEMPRE lsSetItem(chave, valor) e lsGetItem(chave).                ║
+║     → NUNCA use localStorage.setItem ou localStorage.getItem               ║
+║       (exceto para REMEMBER_KEY que é intencional).                         ║
+║                                                                              ║
+║  5. CHAVES DE DADOS (não renomear)                                           ║
+║     → lancamentos_agencias   (STORE_KEY)                                    ║
+║     → lancamentos_prod_gerente (PROD_KEY)                                   ║
+║     → gerentes_agencias      (GER_KEY)                                      ║
+║     → saldos_mensais_agencias (SALDOS_KEY)                                  ║
+║     → lancamentos_gg         (GG_KEY)                                       ║
+║     → historico_trimestre    (TRIM_KEY)                                      ║
+║                                                                              ║
+║  RESUMO: Esta aplicação usa Supabase como banco de dados persistente.       ║
+║  O localStorage é usado APENAS para cache da senha (REMEMBER_KEY).         ║
+║  Qualquer alteração que quebre esta arquitetura fará os dados               ║
+║  pararem de ser compartilhados entre dispositivos.                          ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+-->
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -5,6 +50,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <title>Produção Diária — Agências</title>
+<link rel="icon" href="data:,">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f7; color: #1a1a2e; min-height: 100vh; }
@@ -312,9 +358,73 @@
   .btn-limpar-ger:hover { background:#f4f6f9; }
   .prod-row-saved { background:#f0fbf7; }
   .prod-row-saved td { color:#0d7a5f; }
+
+  /* ── LOGIN SCREEN ── */
+  #login-screen { position:fixed;inset:0;background:linear-gradient(135deg,#1a3a6e 0%,#0d2550 100%);display:flex;align-items:center;justify-content:center;z-index:99999; }
+  .login-box { background:#fff;border-radius:16px;padding:36px 40px;width:380px;max-width:92vw;box-shadow:0 20px 60px rgba(0,0,0,0.4);text-align:center; }
+  .login-logo { font-size:40px;margin-bottom:8px; }
+  .login-title { font-size:18px;font-weight:700;color:#1a3a6e;margin-bottom:4px; }
+  .login-sub { font-size:12px;color:#888;margin-bottom:24px; }
+  .login-pass-wrap { position:relative;margin-bottom:14px; }
+  .login-pass-wrap input { width:100%;padding:11px 42px 11px 14px;border:1.5px solid #d0d5e0;border-radius:8px;font-size:14px;outline:none;color:#1a1a2e;transition:border-color 0.2s;box-sizing:border-box; }
+  .login-pass-wrap input:focus { border-color:#1a3a6e; }
+  .login-eye { position:absolute;right:12px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:16px;color:#888;user-select:none;background:none;border:none;padding:0; }
+  .login-eye:hover { color:#1a3a6e; }
+  .login-remember { display:flex;align-items:center;gap:8px;margin-bottom:18px;justify-content:flex-start; }
+  .login-remember input[type=checkbox] { width:16px;height:16px;accent-color:#1a3a6e;cursor:pointer;flex-shrink:0; }
+  .login-remember label { font-size:12px;color:#555;cursor:pointer; }
+  .login-btn { width:100%;padding:12px;background:#1a3a6e;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;transition:background 0.2s; }
+  .login-btn:hover { background:#15306a; }
+  .login-btn:disabled { opacity:0.6;cursor:not-allowed; }
+  .login-err { color:#b92d2d;font-size:12px;margin-top:10px;min-height:18px;font-weight:600; }
+  .login-loading { font-size:12px;color:#888;margin-top:8px;min-height:18px; }
+  /* ── LOADING OVERLAY ── */
+  #loading-overlay { position:fixed;inset:0;background:rgba(255,255,255,0.92);display:flex;align-items:center;justify-content:center;z-index:9998; }
+  .loading-box { text-align:center; }
+  .loading-box .ld-spinner { width:40px;height:40px;border:4px solid #e0e4ec;border-top-color:#1a3a6e;border-radius:50%;animation:spin 0.7s linear infinite;margin:0 auto 12px; }
+  .loading-box .ld-text { font-size:13px;color:#555;font-weight:600; }
+  /* ── STATUS CONEXÃO ── */
+  .db-status { display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;font-size:10px;font-weight:700;border:1px solid rgba(255,255,255,0.2);cursor:default; }
+  .db-status .dot { width:7px;height:7px;border-radius:50%;flex-shrink:0; }
+  .db-status.online  { background:rgba(13,122,95,0.25);color:#4ade80; }
+  .db-status.online .dot  { background:#4ade80;box-shadow:0 0 6px #4ade80; }
+  .db-status.offline { background:rgba(185,45,45,0.25);color:#f87171; }
+  .db-status.offline .dot { background:#f87171;box-shadow:0 0 6px #f87171; }
+  .db-status.syncing { background:rgba(234,179,8,0.2);color:#fbbf24; }
+  .db-status.syncing .dot { background:#fbbf24;animation:pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.3} }
 </style>
 </head>
 <body>
+
+<!-- ── LOGIN SCREEN ── -->
+<div id="login-screen" style="display:flex">
+  <div class="login-box">
+    <div class="login-logo">📊</div>
+    <div class="login-title">Produção Diária — Agências</div>
+    <div class="login-sub">Banco Safra · Acesso restrito</div>
+    <div class="login-pass-wrap">
+      <input type="password" id="login-pass" placeholder="Digite sua senha"
+        onkeydown="if(event.key==='Enter')doLogin()">
+      <button class="login-eye" id="login-eye" onclick="toggleSenha()" title="Mostrar/ocultar senha">👁</button>
+    </div>
+    <div class="login-remember">
+      <input type="checkbox" id="login-remember" onchange="onRememberChange()">
+      <label for="login-remember">Lembrar senha neste dispositivo</label>
+    </div>
+    <button class="login-btn" id="login-btn" onclick="doLogin()">Entrar</button>
+    <div class="login-err" id="login-err"></div>
+    <div class="login-loading" id="login-loading"></div>
+  </div>
+</div>
+
+<!-- ── LOADING OVERLAY ── -->
+<div id="loading-overlay" style="display:none">
+  <div class="loading-box">
+    <div class="ld-spinner"></div>
+    <div class="ld-text" id="loading-text">Carregando dados...</div>
+  </div>
+</div>
 
 <div class="header">
   <div>
@@ -388,6 +498,10 @@
     </div>
     <button class="btn-gerentes" onclick="abrirNovoMes()" style="background:#e67e22;border-color:#e67e22">📅 Novo Mês</button>
     <button class="btn-gerentes" onclick="abrirGerentes()">👥 Gerenciar Gerentes</button>
+    <div class="db-status syncing" id="db-status-indicator">
+      <div class="dot"></div>
+      <span id="db-status-text">Conectando...</span>
+    </div>
   </div>
 </div>
 
@@ -420,9 +534,13 @@
         <option>Tatuape</option><option>Cidade Jardim</option><option>Santo Amaro</option>
         <option>JK</option><option>Itaim</option><option>Sumaré</option>
       </select>
+      <label>Data:</label>
+      <input type="date" id="ref-date" onchange="atualizarDashTotal(this.value);atualizarPainelGerentes();atualizarCamposComGerentes()">
+    </div>
+  </div>
 
   <!-- Gerentes da agência — cadastro inline -->
-  <div class="card" style="margin-top:12px;border:1px solid #e0e4ec">
+  <div class="card" style="margin-bottom:12px;border:1px solid #e0e4ec">
     <div class="card-title" style="justify-content:space-between;font-size:12px">
       <span>👥 Gerentes da Agência</span>
       <span id="ger-inline-ag-nome" style="color:#1a3a6e;font-weight:700"></span>
@@ -434,10 +552,6 @@
       <input type="text" id="ger-inline-nome" placeholder="Nome do novo gerente" style="flex:1;padding:6px 10px;border:1px solid #d0d5e0;border-radius:6px;font-size:12px;outline:none"
         onkeydown="if(event.key==='Enter') adicionarGerenteInline()">
       <button class="btn btn-secondary btn-sm" onclick="adicionarGerenteInline()" style="white-space:nowrap">+ Adicionar</button>
-    </div>
-  </div>
-      <label>Data:</label>
-      <input type="date" id="ref-date" onchange="atualizarDashTotal(this.value);atualizarPainelGerentes();atualizarCamposComGerentes()">
     </div>
   </div>
 
@@ -572,6 +686,33 @@
         </thead>
         <tbody id="tbody-gerentes-lancar">
           <tr><td colspan="7" style="text-align:center;color:#aaa;padding:12px">Sem lançamentos hoje</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <div id="pg-total" style="display:none;font-size:11px;color:#1a3a6e;font-weight:700;padding:8px 12px;background:#f5f7fb;border-radius:0 0 8px 8px">
+        Total: <span id="pg-total-vop">R$ 0</span> VOP &nbsp;|&nbsp; Net: <span id="pg-total-net">R$ 0</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Gerentes da agência selecionada -->
+  <div id="painel-gerentes-lancar" style="display:none">
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">👥 Gerentes — <span id="pg-agencia-nome">—</span> — <span id="pg-data-nome">—</span></div>
+      <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th class="left th-ag">Gerente</th>
+          <th class="th-day">Prod. Desc.</th>
+          <th class="th-day">Ant/Demais</th>
+          <th class="th-day">Longo Prazo</th>
+          <th class="th-day">Liquidação</th>
+          <th class="th-calc">VOP ⚡</th>
+          <th class="th-net">Net ⚡</th>
+          <th class="th-ag">Ação</th>
+        </tr></thead>
+        <tbody id="tbody-gerentes-lancar">
+          <tr><td colspan="8" style="text-align:center;color:#aaa;padding:12px">Sem lançamentos hoje</td></tr>
         </tbody>
       </table>
       </div>
@@ -855,6 +996,43 @@
     </div>
   </div>
 
+  <!-- Painel Diário -->
+  <div class="card">
+    <div class="card-title">📆 Quadro Diário — Regional <span class="pill pill-green" id="lbl-date-painel"></span></div>
+    <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th class="left th-ag" style="min-width:115px">Agências</th>
+          <th class="th-day">Prod. Desconto</th>
+          <th class="th-day">Ant/Demais</th>
+          <th class="th-day">Longo Prazo</th>
+          <th class="th-day">Liquidação</th>
+          <th class="th-calc">VOP Dia ⚡</th>
+          <th class="th-net">Net Dia ⚡</th>
+          <th class="th-net">Net Proj. Mês ⚡</th>
+          <th class="th-ag">Status</th>
+        </tr>
+      </thead>
+      <tbody id="tbody-diario">
+        <tr><td colspan="9" style="text-align:center;color:#aaa;padding:14px">Carregando...</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <!-- Ranking de Gerentes -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">🏆 Top Gerentes — VOP Acumulado</div>
+      <div id="rank-top-vop"></div>
+    </div>
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">⚠️ Atenção — Menor VOP</div>
+      <div id="rank-bot-vop"></div>
+    </div>
+  </div>
+
   <!-- Consolidado Regional por Agência -->
   <div class="card">
     <div class="card-title" style="justify-content:space-between">
@@ -866,15 +1044,13 @@
     </div>
     <div class="tbl-wrap">
     <table>
-      <thead>
-        <tr>
-          <th class="left th-ag">Agência</th>
-          <th class="th-day">VOP Acum.</th>
-          <th class="th-day">Liquidação</th>
-          <th class="th-net">Net Proj. Mês</th>
-          <th class="th-ag">Dias</th>
-        </tr>
-      </thead>
+      <thead><tr>
+        <th class="left th-ag">Agência</th>
+        <th class="th-day">VOP Acum.</th>
+        <th class="th-day">Liquidação</th>
+        <th class="th-net">Net Proj. Mês</th>
+        <th class="th-ag">Dias</th>
+      </tr></thead>
       <tbody id="tbody-consolidado-regional">
         <tr><td colspan="5" style="text-align:center;color:#aaa;padding:14px">Selecione o mês</td></tr>
       </tbody>
@@ -969,18 +1145,210 @@
 
 
 <script>
+  // ═══════════════════════════════════════════════════════
+  // ── SUPABASE — BANCO DE DADOS PERSISTENTE ──
+  // ═══════════════════════════════════════════════════════
+  const SUPA_URL = 'https://fdefnukjulrhquzmufke.supabase.co';
+  const SUPA_KEY = 'sb_publishable_v8PxB_fIUgVLgT4MoNistQ_OjykbD5O';
+  const REMEMBER_KEY = 'agencias_senha_salva';
+
+  function supaHeaders(extra) {
+    return Object.assign({
+      'Content-Type': 'application/json',
+      'apikey': SUPA_KEY,
+      'Authorization': `Bearer ${SUPA_KEY}`
+    }, extra || {});
+  }
+
+  // ── Cache em memória ──
+  const _memStore = {};
+
+  function lsGet(key)  { return (_memStore[key] !== undefined && _memStore[key] !== null) ? _memStore[key] : null; }
+  function lsSet(key, value) { _memStore[key] = value; supaSet(key, value); }
+  function lsGetItem(key)    { return lsGet(key); }
+  function lsSetItem(key, v) { lsSet(key, v); }
+
+  // ── Status de conexão ──
+  function setDbStatus(status, msg) {
+    const el  = document.getElementById('db-status-indicator');
+    const txt = document.getElementById('db-status-text');
+    if (!el || !txt) return;
+    el.className    = 'db-status ' + status;
+    txt.textContent = msg;
+  }
+
+  // ── Fila de salvamento com debounce ──
+  const _saveTimers = {};
+  function lsSetQueued(key, value) {
+    _memStore[key] = value;
+    clearTimeout(_saveTimers[key]);
+    _saveTimers[key] = setTimeout(() => supaSet(key, _memStore[key]), 300);
+  }
+
+  // ── Escreve no Supabase: PATCH → POST ──
+  async function supaSet(key, value) {
+    setDbStatus('syncing', 'Salvando...');
+    try {
+      const patch = await fetch(
+        `${SUPA_URL}/rest/v1/app_storage?chave=eq.${encodeURIComponent(key)}`,
+        { method: 'PATCH', headers: supaHeaders({ 'Prefer': 'return=representation' }),
+          body: JSON.stringify({ valor: value, atualizado_em: new Date().toISOString() }) }
+      );
+      if (patch.ok) {
+        const updated = await patch.json();
+        if (updated && updated.length > 0) { setDbStatus('online', '🟢 Online'); return; }
+        // Não existe ainda — faz POST
+        const post = await fetch(`${SUPA_URL}/rest/v1/app_storage`, {
+          method: 'POST', headers: supaHeaders({ 'Prefer': 'return=minimal' }),
+          body: JSON.stringify({ chave: key, valor: value, atualizado_em: new Date().toISOString() })
+        });
+        if (post.ok || post.status === 201) { setDbStatus('online', '🟢 Online'); return; }
+        throw new Error('POST ' + post.status);
+      }
+      throw new Error('PATCH ' + patch.status);
+    } catch(e) {
+      setDbStatus('offline', '🔴 Offline');
+      console.error('supaSet erro:', key, e);
+    }
+  }
+
+  // ── Carrega TUDO do Supabase na inicialização ──
+  async function initApp() {
+    const loadingText = document.getElementById('loading-text');
+    if (loadingText) loadingText.textContent = 'Conectando ao banco de dados...';
+    setDbStatus('syncing', 'Conectando...');
+    let tentativas = 0;
+    while (tentativas < 3) {
+      try {
+        const res = await fetch(
+          `${SUPA_URL}/rest/v1/app_storage?select=chave,valor&order=atualizado_em.desc`,
+          { headers: supaHeaders() }
+        );
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const rows = await res.json();
+        rows.forEach(r => { _memStore[r.chave] = r.valor; });
+        setDbStatus('online', '🟢 Online');
+        break;
+      } catch(e) {
+        tentativas++;
+        if (tentativas >= 3) {
+          setDbStatus('offline', '🔴 Offline — sem dados do servidor');
+          console.error('initApp falhou:', e);
+        } else {
+          if (loadingText) loadingText.textContent = `Reconectando... (tentativa ${tentativas + 1})`;
+          await new Promise(r => setTimeout(r, tentativas * 1000));
+        }
+      }
+    }
+    document.getElementById('loading-overlay').style.display = 'none';
+    _initAppUI();
+  }
+
+  // ── Recarrega dados sem overlay ──
+  async function recarregarBanco() {
+    try {
+      const res = await fetch(
+        `${SUPA_URL}/rest/v1/app_storage?select=chave,valor`,
+        { headers: supaHeaders() }
+      );
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const rows = await res.json();
+      rows.forEach(r => { _memStore[r.chave] = r.valor; });
+      setDbStatus('online', '🟢 Online');
+    } catch(e) {
+      setDbStatus('offline', '🔴 Offline');
+    }
+  }
+
+  // ── AUTENTICAÇÃO ──
+  (function checkSavedPassword() {
+    try {
+      const saved = localStorage.getItem(REMEMBER_KEY);
+      if (saved) {
+        document.getElementById('login-pass').value = saved;
+        document.getElementById('login-remember').checked = true;
+      }
+    } catch(e) {}
+  })();
+
+  function toggleSenha() {
+    const input = document.getElementById('login-pass');
+    const eye   = document.getElementById('login-eye');
+    input.type  = input.type === 'password' ? 'text' : 'password';
+    eye.textContent = input.type === 'password' ? '👁' : '🙈';
+  }
+
+  function onRememberChange() {
+    if (!document.getElementById('login-remember').checked)
+      localStorage.removeItem(REMEMBER_KEY);
+  }
+
+  async function doLogin() {
+    const pass   = document.getElementById('login-pass').value.trim();
+    const errEl  = document.getElementById('login-err');
+    const loadEl = document.getElementById('login-loading');
+    const btn    = document.getElementById('login-btn');
+    if (!pass) { errEl.textContent = '⚠️ Digite a senha.'; return; }
+    errEl.textContent  = '';
+    loadEl.textContent = 'Verificando...';
+    btn.disabled       = true;
+    try {
+      const res = await fetch(
+        `${SUPA_URL}/rest/v1/app_config?chave=eq.senha_app&select=valor`,
+        { headers: { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${SUPA_KEY}` } }
+      );
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const rows = await res.json();
+      if (!rows.length) throw new Error('Config não encontrada');
+      if (pass === rows[0].valor) {
+        if (document.getElementById('login-remember').checked)
+          localStorage.setItem(REMEMBER_KEY, pass);
+        else
+          localStorage.removeItem(REMEMBER_KEY);
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('loading-overlay').style.display = 'flex';
+        loadEl.textContent = '';
+        initApp();
+      } else {
+        errEl.textContent  = '❌ Senha incorreta. Tente novamente.';
+        loadEl.textContent = '';
+        btn.disabled       = false;
+        document.getElementById('login-pass').value = '';
+        document.getElementById('login-pass').focus();
+      }
+    } catch(e) {
+      errEl.textContent  = '❌ Erro ao conectar. Verifique sua conexão.';
+      loadEl.textContent = '';
+      btn.disabled       = false;
+    }
+  }
+
+  // Auto-login se senha salva
+  window.addEventListener('DOMContentLoaded', () => {
+    const saved = localStorage.getItem(REMEMBER_KEY);
+    if (saved) {
+      document.getElementById('login-pass').value = saved;
+      document.getElementById('login-remember').checked = true;
+      doLogin();
+    }
+  });
+
+  // Global variables
+  let today = new Date().toISOString().split('T')[0];
+
+
   // ── Produtividade — Tabela de preenchimento por gerente ──
   const PROD_KEY = 'lancamentos_prod_gerente';
 
   function salvarProdGerente(payload) {
-    let store = JSON.parse(localStorage.getItem(PROD_KEY) || '[]');
+    let store = JSON.parse(lsGetItem(PROD_KEY) || '[]');
     store = store.filter(r => !(r.agency === payload.agency && r.gerente === payload.gerente && r.date === payload.date));
     store.push(payload);
-    localStorage.setItem(PROD_KEY, JSON.stringify(store));
+    lsSetItem(PROD_KEY, JSON.stringify(store));
   }
 
   function carregarProdGerente(agency, date) {
-    return JSON.parse(localStorage.getItem(PROD_KEY) || '[]')
+    return JSON.parse(lsGetItem(PROD_KEY) || '[]')
       .filter(r => r.agency === agency && r.date === date);
   }
 
@@ -1055,9 +1423,9 @@
   }
 
   function limparProdGerente(rowId, agency, gerente, date) {
-    let store = JSON.parse(localStorage.getItem(PROD_KEY) || '[]');
+    let store = JSON.parse(lsGetItem(PROD_KEY) || '[]');
     store = store.filter(r => !(r.agency === agency && r.gerente === gerente && r.date === date));
-    localStorage.setItem(PROD_KEY, JSON.stringify(store));
+    lsSetItem(PROD_KEY, JSON.stringify(store));
     // Limpa inputs
     ['desc','ant','lp','liq'].forEach(f => {
       const el = document.getElementById('pd-'+f+'-'+rowId);
@@ -1073,10 +1441,7 @@
   function renderGerentesAgencia(agParam) {
     var agency = agParam || document.getElementById('prod-agency').value;
     if (agParam) { var _pa=document.getElementById('prod-agency'); if(_pa) _pa.value=agParam; }
-    var dateEl = document.getElementById('prod-data');
-    // Se não tem data, usa hoje
-    if (dateEl && !dateEl.value) dateEl.value = new Date().toISOString().slice(0,10);
-    var date   = dateEl ? dateEl.value : new Date().toISOString().slice(0,10);
+    var date   = document.getElementById('prod-data').value;
     var tbody  = document.getElementById('tbody-prod-input');
 
     if (!agency) { tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#aaa;padding:16px">Selecione a agência</td></tr>'; return; }
@@ -1088,13 +1453,13 @@
       return;
     }
 
-    var salvos = JSON.parse(localStorage.getItem(PROD_KEY) || '[]').filter(function(r){ return r.agency===agency && r.date===date; });
+    var salvos = JSON.parse(lsGetItem(PROD_KEY) || '[]').filter(function(r){ return r.agency===agency && r.date===date; });
     var salvoMap = {};
     salvos.forEach(function(r){ salvoMap[r.gerente] = r; });
 
     var mes = date.slice(0,7);
     var vopAcum = {};
-    JSON.parse(localStorage.getItem(PROD_KEY)||'[]').filter(function(r){ return r.agency===agency && r.date && r.date.startsWith(mes); }).forEach(function(r){
+    JSON.parse(lsGetItem(PROD_KEY)||'[]').filter(function(r){ return r.agency===agency && r.date && r.date.startsWith(mes); }).forEach(function(r){
       if(!vopAcum[r.gerente]) vopAcum[r.gerente]=0;
       vopAcum[r.gerente]+=(Number(r.prodDesconto)||0)+(Number(r.antDemais)||0)+(Number(r.longoPrazo)||0);
     });
@@ -1127,7 +1492,7 @@
         '</tr>';
     });
 
-    var hist = JSON.parse(localStorage.getItem(PROD_KEY)||'[]').filter(function(r){ return r.agency===agency && r.date && r.date.startsWith(mes) && r.date!==date; }).sort(function(a,b){ return b.date.localeCompare(a.date); });
+    var hist = JSON.parse(lsGetItem(PROD_KEY)||'[]').filter(function(r){ return r.agency===agency && r.date && r.date.startsWith(mes) && r.date!==date; }).sort(function(a,b){ return b.date.localeCompare(a.date); });
     if(hist.length) {
       rows += '<tr><td colspan="9" style="padding:6px 9px;background:#f0f2f7;font-size:10px;color:#888;font-weight:600">📅 Histórico do mês</td></tr>';
       hist.forEach(function(r) {
@@ -1158,21 +1523,11 @@
     const mes   = document.getElementById('prod-mes').value;
     if (!mes) return;
 
-    const agFil = (document.getElementById('diario-filtro-ag')||{value:''}).value;
+    const agFil = (document.getElementById('diario-filtro-ag')||{value:''}).value ||
+                  (document.getElementById('prod-agency')||{value:''}).value;
 
-    // Sem agência selecionada — mostra mensagem
-    if (!agFil) {
-      const grid = document.getElementById('prod-pipe-grid');
-      if (grid) grid.innerHTML = '<div style="color:#aaa;font-size:12px;padding:16px;text-align:center">Selecione uma agência no filtro acima para ver a produção</div>';
-      const tot = document.getElementById('prod-total');
-      if (tot) tot.style.display = 'none';
-      const tb = document.getElementById('tbody-prod');
-      if (tb) tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#aaa;padding:14px">Selecione uma agência</td></tr>';
-      return;
-    }
-
-    const prodStore = JSON.parse(localStorage.getItem(PROD_KEY)  || '[]');
-    const diarStore = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+    const prodStore = JSON.parse(lsGetItem(PROD_KEY)  || '[]');
+    const diarStore = JSON.parse(lsGetItem(STORE_KEY) || '[]');
 
     let prodMes = prodStore.filter(r => r.date && r.date.startsWith(mes));
     let diarMes = diarStore.filter(r => r.date && r.date.startsWith(mes));
@@ -1211,7 +1566,7 @@
     });
 
     // Pega netProjMes do STORE_KEY (valor exato da primeira tela)
-    const storeAll = JSON.parse(localStorage.getItem(STORE_KEY)||'[]');
+    const storeAll = JSON.parse(lsGetItem(STORE_KEY)||'[]');
     const netProjByAg = {};
     storeAll.filter(r => r.date && r.date.startsWith(mes))
       .sort((a,b) => a.date.localeCompare(b.date))
@@ -1293,12 +1648,12 @@
     msg.innerHTML = 'Apagar toda a produção de <strong>'+agency+'</strong> em <strong>'+mes+'</strong>?';
     mbtn.onclick = function() {
       modal.style.display = 'none';
-      let p = JSON.parse(localStorage.getItem(PROD_KEY)||'[]');
+      let p = JSON.parse(lsGetItem(PROD_KEY)||'[]');
       p = p.filter(r => !(r.agency===agency && r.date && r.date.startsWith(mes)));
-      localStorage.setItem(PROD_KEY, JSON.stringify(p));
-      let d = JSON.parse(localStorage.getItem(STORE_KEY)||'[]');
+      lsSetItem(PROD_KEY, JSON.stringify(p));
+      let d = JSON.parse(lsGetItem(STORE_KEY)||'[]');
       d = d.filter(r => !(r.agency===agency && r.date && r.date.startsWith(mes)));
-      localStorage.setItem(STORE_KEY, JSON.stringify(d));
+      lsSetItem(STORE_KEY, JSON.stringify(d));
       showToast('🗑 Produção de '+agency+' removida!');
       renderProdutividade();
     };
@@ -1307,13 +1662,13 @@
 
 
   function limparGerMes(agency, gerente, mes) {
-    let prodStore = JSON.parse(localStorage.getItem(PROD_KEY) || '[]');
+    let prodStore = JSON.parse(lsGetItem(PROD_KEY) || '[]');
     prodStore = prodStore.filter(r => !(r.agency === agency && r.gerente === gerente && r.date && r.date.startsWith(mes)));
-    localStorage.setItem(PROD_KEY, JSON.stringify(prodStore));
+    lsSetItem(PROD_KEY, JSON.stringify(prodStore));
     // Também remove STORE_KEY do mesmo período
-    let diarStore = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+    let diarStore = JSON.parse(lsGetItem(STORE_KEY) || '[]');
     diarStore = diarStore.filter(r => !(r.agency === agency && r.date && r.date.startsWith(mes)));
-    localStorage.setItem(STORE_KEY, JSON.stringify(diarStore));
+    lsSetItem(STORE_KEY, JSON.stringify(diarStore));
     showToast('🗑 Lançamentos de ' + gerente + ' removidos!');
     renderProdutividade();
     const agSel = document.getElementById('prod-agency');
@@ -1338,9 +1693,6 @@
   function sincronizarAgencia(ag) {
     const prodAg = document.getElementById('prod-agency');
     if (prodAg) prodAg.value = ag || '';
-    // Garante data preenchida com hoje
-    const prodData = document.getElementById('prod-data');
-    if (prodData && !prodData.value) prodData.value = new Date().toISOString().slice(0,10);
     const tbody = document.getElementById('tbody-prod-input');
     if (!ag) {
       if (tbody) tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#aaa;padding:16px">Selecione uma agência acima</td></tr>';
@@ -1381,7 +1733,7 @@
       var pipe = desc + ant + lp;
       var net  = pipe + liq;
       // Atualiza no STORE_KEY
-      var store = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+      var store = JSON.parse(lsGetItem(STORE_KEY) || '[]');
       var si = store.findIndex(function(x){ return x.agency===r.agency && x.date===r.date; });
       if (si >= 0) {
         store[si].prodDesconto    = desc;
@@ -1390,10 +1742,10 @@
         store[si].liquidacaoTotal = liq;
         store[si].vopDia          = pipe;
         store[si].netDia          = net;
-        localStorage.setItem(STORE_KEY, JSON.stringify(store));
+        lsSetItem(STORE_KEY, JSON.stringify(store));
       }
       // Atualiza também no PROD_KEY os gerentes do mesmo dia/agência
-      var prodStore = JSON.parse(localStorage.getItem(PROD_KEY) || '[]');
+      var prodStore = JSON.parse(lsGetItem(PROD_KEY) || '[]');
       var updated = false;
       prodStore.forEach(function(pr) {
         if (pr.agency === r.agency && pr.date === r.date) {
@@ -1401,7 +1753,7 @@
           updated = true;
         }
       });
-      if (updated) localStorage.setItem(PROD_KEY, JSON.stringify(prodStore));
+      if (updated) lsSetItem(PROD_KEY, JSON.stringify(prodStore));
       modal.style.display = 'none';
       btn.textContent = 'Excluir';
       btn.style.background = '';
@@ -1428,9 +1780,9 @@
 
     // Lê PROD_KEY (gerentes) + STORE_KEY (agência) e consolida por dia
     const filtMes = dia ? dia.slice(0,7) : mes;
-    const prodRows = JSON.parse(localStorage.getItem(PROD_KEY)||'[]')
+    const prodRows = JSON.parse(lsGetItem(PROD_KEY)||'[]')
       .filter(r => r.agency===agFil && r.date && r.date.startsWith(filtMes) && (!dia||r.date===dia));
-    const diarRows2 = JSON.parse(localStorage.getItem(STORE_KEY)||'[]')
+    const diarRows2 = JSON.parse(lsGetItem(STORE_KEY)||'[]')
       .filter(r => r.agency===agFil && r.date && r.date.startsWith(filtMes) && (!dia||r.date===dia));
 
     // Consolida por DIA — soma todos os gerentes
@@ -1511,7 +1863,7 @@
     const [y,m,d] = dia.split('-');
 
     // Lê lançamentos do PROD_KEY do dia
-    const prodStore = JSON.parse(localStorage.getItem(PROD_KEY) || '[]');
+    const prodStore = JSON.parse(lsGetItem(PROD_KEY) || '[]');
     const rows = prodStore.filter(r => r.date === dia);
 
     if (!rows.length) {
@@ -1580,11 +1932,11 @@
     const pipe = desc + ant + lp;
     const net  = pipe + liq;
 
-    let store = JSON.parse(localStorage.getItem(PROD_KEY) || '[]');
+    let store = JSON.parse(lsGetItem(PROD_KEY) || '[]');
     const idx = store.findIndex(r => r.date === dia && r.agency === agency && (r.gerente||'') === gerente);
     if (idx >= 0) {
       store[idx] = { ...store[idx], prodDesconto: desc, antDemais: ant, longoPrazo: lp, liquidacaoTotal: liq, pipe, netProjetado: net };
-      localStorage.setItem(PROD_KEY, JSON.stringify(store));
+      lsSetItem(PROD_KEY, JSON.stringify(store));
       showToast('✅ Lançamento de ' + (gerente||agency) + ' atualizado!');
       renderProdutividade();
     } else {
@@ -1618,15 +1970,15 @@
     btn.onclick = function() {
       modal.style.display = 'none';
       // Remove do PROD_KEY
-      let prodStore = JSON.parse(localStorage.getItem(PROD_KEY) || '[]');
+      let prodStore = JSON.parse(lsGetItem(PROD_KEY) || '[]');
       const antProd = prodStore.length;
       prodStore = prodStore.filter(r => (r.gerente||'').toLowerCase() !== gerente.toLowerCase());
-      localStorage.setItem(PROD_KEY, JSON.stringify(prodStore));
+      lsSetItem(PROD_KEY, JSON.stringify(prodStore));
       // Remove do STORE_KEY
-      let diarStore = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+      let diarStore = JSON.parse(lsGetItem(STORE_KEY) || '[]');
       const antDiar = diarStore.length;
       diarStore = diarStore.filter(r => (r.gerente||'').toLowerCase() !== gerente.toLowerCase());
-      localStorage.setItem(STORE_KEY, JSON.stringify(diarStore));
+      lsSetItem(STORE_KEY, JSON.stringify(diarStore));
       const removidos = (antProd - prodStore.length) + (antDiar - diarStore.length);
       showToast('🗑 ' + removidos + ' lançamento(s) de ' + gerente + ' removidos!');
       renderProdutividade();
@@ -1660,13 +2012,13 @@
       modal.style.display = 'none';
       const filtro = r => dia ? r.date === dia : (mes ? r.date && r.date.startsWith(mes) : false);
 
-      let store = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+      let store = JSON.parse(lsGetItem(STORE_KEY) || '[]');
       store = store.filter(r => !filtro(r));
-      localStorage.setItem(STORE_KEY, JSON.stringify(store));
+      lsSetItem(STORE_KEY, JSON.stringify(store));
 
-      let prodStore = JSON.parse(localStorage.getItem(PROD_KEY) || '[]');
+      let prodStore = JSON.parse(lsGetItem(PROD_KEY) || '[]');
       prodStore = prodStore.filter(r => !filtro(r));
-      localStorage.setItem(PROD_KEY, JSON.stringify(prodStore));
+      lsSetItem(PROD_KEY, JSON.stringify(prodStore));
 
       showToast('🗑 Dados apagados!');
       renderProdutividade();
@@ -1678,10 +2030,10 @@
 
   // ── Gerentes ────────────────────────────────────────────
   function carregarGerentes() {
-    return JSON.parse(localStorage.getItem(GER_KEY) || '[]');
+    return JSON.parse(lsGetItem(GER_KEY) || '[]');
   }
   function salvarGerentes(lista) {
-    localStorage.setItem(GER_KEY, JSON.stringify(lista));
+    lsSetItem(GER_KEY, JSON.stringify(lista));
   }
   function gerentesDaAgencia(ag) {
     return carregarGerentes().filter(g => g.agencia === ag);
@@ -1733,8 +2085,10 @@
     renderGerTable();
   }
   function atualizarSelectGerente() {
-    const ag  = (document.getElementById('gg-agency')||{value:''}).value;
-    const sel = document.getElementById('gg-gerente');
+    const agEl = document.getElementById('gg-agency');
+    const sel  = document.getElementById('gg-gerente');
+    if (!agEl || !sel) return;
+    const ag = agEl.value;
     sel.innerHTML = '<option value="">— Selecione —</option>';
     if (!ag) return;
     gerentesDaAgencia(ag).forEach(g => {
@@ -1747,13 +2101,13 @@
 
   // ── GG Lançamentos ───────────────────────────────────────
   function carregarGGDia(date) {
-    return JSON.parse(localStorage.getItem(GG_KEY) || '[]').filter(r => r.date === date);
+    return JSON.parse(lsGetItem(GG_KEY) || '[]').filter(r => r.date === date);
   }
   function salvarGGLocal(payload) {
-    let store = JSON.parse(localStorage.getItem(GG_KEY) || '[]');
+    let store = JSON.parse(lsGetItem(GG_KEY) || '[]');
     store = store.filter(r => !(r.agency === payload.agency && r.gerente === payload.gerente && r.date === payload.date));
     store.push(payload);
-    localStorage.setItem(GG_KEY, JSON.stringify(store));
+    lsSetItem(GG_KEY, JSON.stringify(store));
   }
 
   function calcGG() {
@@ -1799,9 +2153,9 @@
     const dt  = (document.getElementById('gg-date')||{value:''}).value;
     if (!ag || !ger) { showToast('⚠️ Selecione agência e gerente.', true); return; }
     if (!confirm('Apagar o lançamento de ' + ger + ' em ' + ag + '?')) return;
-    let store = JSON.parse(localStorage.getItem(GG_KEY) || '[]');
+    let store = JSON.parse(lsGetItem(GG_KEY) || '[]');
     store = store.filter(r => !(r.agency === ag && r.gerente === ger && r.date === dt));
-    localStorage.setItem(GG_KEY, JSON.stringify(store));
+    lsSetItem(GG_KEY, JSON.stringify(store));
     showToast('🗑 Lançamento removido.');
     const dtAtual = (document.getElementById('gg-date')||{value:''}).value;
     renderRetorno(dtAtual);
@@ -1835,11 +2189,12 @@
 
     if (total) {
       total.style.display = 'flex';
-      const _rtTotC = document.getElementById('rt-total-contas'); if(_rtTotC) _rtTotC.textContent = totContas;
-      const _rtMeta = document.getElementById('rt-meta-total');   if(_rtMeta) _rtMeta.textContent = metaTot;
-      const _rtPct  = document.getElementById('rt-pct-total');    if(_rtPct)  { _rtPct.textContent = pctTot + '%'; _rtPct.style.color = pctTot >= 100 ? '#0d7a5f' : pctTot >= 60 ? '#e67e22' : '#b92d2d'; }
-      const _rtNa   = document.getElementById('rt-na-meta');      if(_rtNa)   _rtNa.textContent = naMeta;
-      const _rtAb   = document.getElementById('rt-abaixo');       if(_rtAb)   _rtAb.textContent = abaixo;
+      document.getElementById('rt-total-contas').textContent = totContas;
+      document.getElementById('rt-meta-total').textContent   = metaTot;
+      document.getElementById('rt-pct-total').textContent    = pctTot + '%';
+      document.getElementById('rt-pct-total').style.color    = pctTot >= 100 ? '#0d7a5f' : pctTot >= 60 ? '#e67e22' : '#b92d2d';
+      document.getElementById('rt-na-meta').textContent      = naMeta;
+      document.getElementById('rt-abaixo').textContent       = abaixo;
     }
 
     grid.innerHTML = sorted.map((r, i) => {
@@ -1916,8 +2271,8 @@
     const mes  = date ? date.slice(0,7) : new Date().toISOString().slice(0,7);
 
     // Agrupa VOP por agência+gerente — soma, sem duplicar mesma data+gerente
-    const prodStore = JSON.parse(localStorage.getItem(PROD_KEY)  || '[]');
-    const diarStore = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+    const prodStore = JSON.parse(lsGetItem(PROD_KEY)  || '[]');
+    const diarStore = JSON.parse(lsGetItem(STORE_KEY) || '[]');
 
     const byKey = {};  // key = agency||gerente||date para deduplicar
 
@@ -2000,9 +2355,9 @@
     const date = document.getElementById('painel-date').value;
     const [y,m,d] = date.split('-');
     if (!confirm('Apagar TODOS os lançamentos GG do dia ' + d+'/'+m+'/'+y + '?')) return;
-    let store = JSON.parse(localStorage.getItem(GG_KEY) || '[]');
+    let store = JSON.parse(lsGetItem(GG_KEY) || '[]');
     store = store.filter(r => r.date !== date);
-    localStorage.setItem(GG_KEY, JSON.stringify(store));
+    lsSetItem(GG_KEY, JSON.stringify(store));
     showToast('🗑 Lançamentos GG do dia apagados.');
     carregarPainel();
   }
@@ -2015,7 +2370,9 @@
   const STORE_KEY      = 'lancamentos_agencias';
   const SALDOS_KEY     = 'saldos_mensais_agencias';
 
-  const today = new Date().toISOString().split('T')[0];
+
+  function _initAppUI() {
+  today = new Date().toISOString().split('T')[0];
 
   document.getElementById('ref-date').value    = today;
   document.getElementById('painel-date').value = today;
@@ -2065,6 +2422,8 @@
       netAcumulado:   netDiaAnt|| exist.netAcumulado,
     });
   }
+  } // end _initAppUI
+
 
   function resetarMes(e) {
     if (e) e.preventDefault();
@@ -2072,9 +2431,9 @@
     if (!agency) { showToast('⚠️ Selecione a agência primeiro.', true); return; }
     if (!confirm('Redefinir os valores iniciais de ' + agency + ' para o novo mês?\nOs campos de cima serão limpos.')) return;
     // Remove saldos mensais da agência
-    let store = JSON.parse(localStorage.getItem(SALDOS_KEY) || '{}');
+    let store = JSON.parse(lsGetItem(SALDOS_KEY) || '{}');
     delete store[agency];
-    localStorage.setItem(SALDOS_KEY, JSON.stringify(store));
+    lsSetItem(SALDOS_KEY, JSON.stringify(store));
     // Limpa campos de cima
     ['m-metaVop','m-descIni','m-quenteIni','m-arvIni','m-liqIni','m-netDiaAnt']
       .forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
@@ -2102,7 +2461,7 @@
     const date = (document.getElementById('ref-date')||{value:''}).value;
     if (!ag || !date) return;
 
-    const prod = JSON.parse(localStorage.getItem('lancamentos_prod_gerente')||'[]')
+    const prod = JSON.parse(lsGetItem('lancamentos_prod_gerente')||'[]')
       .filter(function(r){ return r.agency===ag && r.date===date; });
 
     if (!prod.length) return; // sem gerentes, não altera
@@ -2151,7 +2510,7 @@
     const [y,m,d] = date.split('-');
     document.getElementById('pg-data-nome').textContent = d+'/'+m+'/'+y;
 
-    const prod = JSON.parse(localStorage.getItem('lancamentos_prod_gerente')||'[]')
+    const prod = JSON.parse(lsGetItem('lancamentos_prod_gerente')||'[]')
       .filter(function(r){ return r.agency===ag && r.date===date; });
     const salvoMap = {};
     prod.forEach(function(r){ salvoMap[r.gerente] = r; });
@@ -2229,10 +2588,10 @@
     const pipe = desc + ant + lp;
     const net  = pipe + liq;
     const payload = { agency, gerente, date, prodDesconto:desc, antDemais:ant, longoPrazo:lp, liquidacaoTotal:liq, pipe, netProjetado:net };
-    let store = JSON.parse(localStorage.getItem('lancamentos_prod_gerente')||'[]');
+    let store = JSON.parse(lsGetItem('lancamentos_prod_gerente')||'[]');
     store = store.filter(function(r){ return !(r.agency===agency&&r.gerente===gerente&&r.date===date); });
     store.push(payload);
-    localStorage.setItem('lancamentos_prod_gerente', JSON.stringify(store));
+    lsSetItem('lancamentos_prod_gerente', JSON.stringify(store));
     showToast('✅ '+gerente+' salvo!');
     atualizarPainelGerentes();
     atualizarCamposComGerentes();
@@ -2256,61 +2615,6 @@
       atualizarCamposComGerentes();
       renderGerentesAgencia && renderGerentesAgencia();
       renderProdutividade && renderProdutividade();
-    };
-    modal.style.display = 'flex';
-  }
-
-  function renderGerentesInline(ag) {
-    const lista = document.getElementById('ger-inline-lista');
-    const lbl   = document.getElementById('ger-inline-ag-nome');
-    if (!lista) return;
-    if (!ag) {
-      lista.innerHTML = '<div style="color:#aaa;font-size:11px;text-align:center;padding:8px">Selecione a agência para ver os gerentes</div>';
-      if (lbl) lbl.textContent = '';
-      return;
-    }
-    if (lbl) lbl.textContent = ag;
-    const gers = gerentesDaAgencia(ag);
-    if (!gers.length) {
-      lista.innerHTML = '<div style="color:#aaa;font-size:11px;text-align:center;padding:8px">Nenhum gerente cadastrado. Adicione abaixo.</div>';
-      return;
-    }
-    lista.innerHTML = gers.map(g =>
-      '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #f0f2f7">' +
-        '<span style="font-size:12px;color:#1a3a6e">👤 ' + g.nome + '</span>' +
-        '<button class="btn-gd-del" onclick="removerGerenteInline(\'' + ag + '\',\'' + g.nome + '\')" title="Remover" style="font-size:10px;padding:2px 6px">🗑</button>' +
-      '</div>'
-    ).join('');
-  }
-
-  function adicionarGerenteInline() {
-    const ag   = document.getElementById('agency-select').value;
-    const nome = (document.getElementById('ger-inline-nome').value||'').trim();
-    if (!ag)   { showToast('⚠️ Selecione a agência primeiro!', true); return; }
-    if (!nome) { showToast('⚠️ Digite o nome do gerente!', true); return; }
-    const lista = carregarGerentes();
-    const existe = lista.find(g => g.agencia === ag && g.nome.toLowerCase() === nome.toLowerCase());
-    if (existe) { showToast('⚠️ Gerente já cadastrado!', true); return; }
-    lista.push({ agencia: ag, nome: nome });
-    salvarGerentes(lista);
-    document.getElementById('ger-inline-nome').value = '';
-    showToast('✅ ' + nome + ' adicionado!');
-    renderGerentesInline(ag);
-    atualizarPainelGerentes();
-  }
-
-  function removerGerenteInline(ag, nome) {
-    const modal = document.getElementById('del-modal');
-    const msg   = document.getElementById('del-modal-msg');
-    const mbtn  = document.getElementById('del-modal-btn');
-    msg.innerHTML = 'Remover <strong>' + nome + '</strong> de ' + ag + '?';
-    mbtn.onclick = function() {
-      modal.style.display = 'none';
-      let lista = carregarGerentes().filter(g => !(g.agencia===ag && g.nome===nome));
-      salvarGerentes(lista);
-      showToast('🗑 ' + nome + ' removido!');
-      renderGerentesInline(ag);
-      atualizarPainelGerentes();
     };
     modal.style.display = 'flex';
   }
@@ -2339,7 +2643,7 @@
           : ag ? 'Nenhum gerente cadastrado. Use 👥 para adicionar.' : '';
       }
       // Restaura último gerente usado nesta agência
-      const ultimo = localStorage.getItem('ultimo_gerente_' + ag);
+      const ultimo = lsGetItem('ultimo_gerente_' + ag);
       var refGer = document.getElementById('ref-gerente');
       if (ultimo && refGer && refGer.value === '') { refGer.value = ultimo; }
     }
@@ -2365,7 +2669,7 @@
 
   function salvarUltimoGerente(nome) {
     const ag = document.getElementById('agency-select').value;
-    if (ag && nome) localStorage.setItem('ultimo_gerente_' + ag, nome);
+    if (ag && nome) lsSetItem('ultimo_gerente_' + ag, nome);
   }
 
   function fmtShort(v) {
@@ -2383,8 +2687,8 @@
     try {
       const date    = dateStr || document.getElementById('ref-date').value || today;
       const mes     = date.slice(0, 7); // YYYY-MM
-      const store   = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
-      const saldos  = JSON.parse(localStorage.getItem(SALDOS_KEY) || '{}');
+      const store   = JSON.parse(lsGetItem(STORE_KEY) || '[]');
+      const saldos  = JSON.parse(lsGetItem(SALDOS_KEY) || '{}');
 
       // VOP acumulado = soma de TODOS os dias do mês (todos os lançamentos)
       const doMes     = store.filter(r => r.date && r.date.startsWith(mes));
@@ -2599,7 +2903,7 @@
       cont.innerHTML = '<div style="color:#aaa;text-align:center;padding:16px">Selecione agência e data</div>';
       return;
     }
-    const store = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+    const store = JSON.parse(lsGetItem(STORE_KEY) || '[]');
     const rows  = store.filter(r => r.agency === agency && r.date === date);
 
     if (!rows.length) {
@@ -2659,7 +2963,7 @@
   }
 
   function salvarEdicaoDia(i, agency, date) {
-    let store = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+    let store = JSON.parse(lsGetItem(STORE_KEY) || '[]');
     const idx = store.findIndex(r => r.agency === agency && r.date === date);
     if (idx === -1) { showToast('❌ Registro não encontrado.', true); return; }
     const desc = parseFloat(document.getElementById('gd-desc-'+i).value)||0;
@@ -2670,7 +2974,7 @@
     const net  = vop + liq;
     store[idx] = { ...store[idx], prodDesconto: desc, antDemais: ant, longoPrazo: lp,
       liquidacaoTotal: liq, vopDia: vop, netDia: net };
-    localStorage.setItem(STORE_KEY, JSON.stringify(store));
+    lsSetItem(STORE_KEY, JSON.stringify(store));
     showToast('✅ Lançamento atualizado!');
     carregarProdDia();
     // Recarrega cima se for a mesma agência
@@ -2681,9 +2985,9 @@
 
   function excluirProdDia(agency, date, gerente) {
     if (!confirm('Excluir o lançamento de ' + gerente + ' em ' + date + '?')) return;
-    let store = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+    let store = JSON.parse(lsGetItem(STORE_KEY) || '[]');
     store = store.filter(r => !(r.agency === agency && r.date === date && (r.gerente||agency) === gerente));
-    localStorage.setItem(STORE_KEY, JSON.stringify(store));
+    lsSetItem(STORE_KEY, JSON.stringify(store));
     showToast('🗑 Lançamento excluído.');
     carregarProdDia();
     if (document.getElementById('agency-select').value === agency) {
@@ -2720,6 +3024,9 @@
     if (tab === 'lancamento') {
       tabs[0].classList.add('active');
       document.getElementById('page-lancamento').classList.add('active');
+      recarregarBanco().then(() => {
+        if (document.getElementById('agency-select').value) syncNomes();
+      });
     } else if (tab === 'gg') {
       tabs[1].classList.add('active');
       document.getElementById('page-gg').classList.add('active');
@@ -2733,7 +3040,6 @@
       tabs[2].classList.add('active');
       document.getElementById('page-painel').classList.add('active');
       carregarPainel();
-      renderConsolidadoRegionalInit();
     }
   }
 
@@ -2786,7 +3092,7 @@
     // Soma prod dos gerentes (PROD_KEY) do mesmo dia/agência
     const _agLanc  = (document.getElementById('agency-select')||{value:''}).value;
     const _datLanc = (document.getElementById('ref-date')||{value:''}).value;
-    const _prodGer = JSON.parse(localStorage.getItem('lancamentos_prod_gerente')||'[]')
+    const _prodGer = JSON.parse(lsGetItem('lancamentos_prod_gerente')||'[]')
       .filter(function(r){ return r.agency===_agLanc && r.date===_datLanc; });
     const _gerDesc = _prodGer.reduce(function(s,r){ return s+(Number(r.prodDesconto)||0); }, 0);
     const _gerAnt  = _prodGer.reduce(function(s,r){ return s+(Number(r.antDemais)||0); }, 0);
@@ -2873,7 +3179,7 @@
     const lp       = g('d-lp'),   liq    = g('d-liq');
 
     // Soma prod dos gerentes do mesmo dia/agência
-    const _pgRows  = JSON.parse(localStorage.getItem('lancamentos_prod_gerente')||'[]')
+    const _pgRows  = JSON.parse(lsGetItem('lancamentos_prod_gerente')||'[]')
       .filter(r => r.agency===agency && r.date===date);
     const _pgDesc  = _pgRows.reduce((s,r)=>s+(Number(r.prodDesconto)||0),0);
     const _pgAnt   = _pgRows.reduce((s,r)=>s+(Number(r.antDemais)||0),0);
@@ -2962,21 +3268,21 @@
   // ── Armazenamento local de lançamentos ────────────────────
   // Salva saldos mensais da agência (atualiza após cada envio)
   function salvarSaldosMensais(agency, saldos) {
-    let store = JSON.parse(localStorage.getItem(SALDOS_KEY) || '{}');
+    let store = JSON.parse(lsGetItem(SALDOS_KEY) || '{}');
     store[agency] = saldos;
-    localStorage.setItem(SALDOS_KEY, JSON.stringify(store));
+    lsSetItem(SALDOS_KEY, JSON.stringify(store));
   }
 
   // Carrega saldos mensais salvos para pré-preencher campos de cima
   function carregarSaldosMensais(agency) {
-    const store = JSON.parse(localStorage.getItem(SALDOS_KEY) || '{}');
+    const store = JSON.parse(lsGetItem(SALDOS_KEY) || '{}');
     return store[agency] || null;
   }
 
   // Calcula consolidado acumulado do mês para a agência
   function calcAcumuladoMes(agency, mesParam) {
     const mes   = mesParam || new Date().toISOString().slice(0, 7);
-    const store = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+    const store = JSON.parse(lsGetItem(STORE_KEY) || '[]');
     const rows  = store.filter(r => r.agency === agency && r.date && r.date.startsWith(mes));
     if (!rows.length) return null;
 
@@ -3030,8 +3336,8 @@
     // Net Atual = soma acumulada dos Net Dia de todos os gerentes no mês
     // Acumula dia a dia: cada dia o net pode melhorar ou piorar
     const mes      = new Date().toISOString().slice(0,7);
-    const prodStore = JSON.parse(localStorage.getItem(PROD_KEY)  || '[]');
-    const diarStore = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+    const prodStore = JSON.parse(lsGetItem(PROD_KEY)  || '[]');
+    const diarStore = JSON.parse(lsGetItem(STORE_KEY) || '[]');
 
     // Agrupa por data — pega o net de cada dia (soma gerentes do mesmo dia)
     const porDia = {};
@@ -3058,15 +3364,15 @@
   }
 
   function salvarLocal(payload) {
-    let store = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+    let store = JSON.parse(lsGetItem(STORE_KEY) || '[]');
     // Remove lançamento anterior da mesma agência na mesma data
     store = store.filter(r => !(r.agency === payload.agency && r.date === payload.date));
     store.push(payload);
-    localStorage.setItem(STORE_KEY, JSON.stringify(store));
+    lsSetItem(STORE_KEY, JSON.stringify(store));
   }
 
   function carregarLocal(date) {
-    const store = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+    const store = JSON.parse(lsGetItem(STORE_KEY) || '[]');
     return store.filter(r => r.date === date);
   }
 
@@ -3077,7 +3383,7 @@
 
   function montarPainelLocal(date) {
     // Lê APENAS STORE_KEY (lançamentos da aba Lançar Produção) — 1 lançamento por agência
-    const storeRows = (JSON.parse(localStorage.getItem(STORE_KEY) || '[]')).filter(r => r.date === date);
+    const storeRows = (JSON.parse(lsGetItem(STORE_KEY) || '[]')).filter(r => r.date === date);
 
     // Um registro por agência (último enviado)
     const byAgency = {};
@@ -3129,88 +3435,29 @@
   function carregarPainel() {
     const date = document.getElementById('painel-date').value;
     const [y,m,d] = date.split('-');
-    const _lblDate = document.getElementById('lbl-date-painel'); if(_lblDate) _lblDate.textContent = `${d}/${m}/${y}`;
+    document.getElementById('lbl-date-painel').textContent = `${d}/${m}/${y}`;
     document.getElementById('last-update').textContent = 'Atualizando...';
 
-    // Tenta buscar do servidor; se não houver URL, usa localStorage
+    // Sempre recarrega do Supabase antes de renderizar
+    recarregarBanco().then(() => {
+      renderPainel(montarPainelLocal(date));
+      document.getElementById('last-update').textContent = 'Banco de dados — ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+    });
+
+    // Mantém fallback para Apps Script se configurado
     if (SCRIPT_URL && SCRIPT_URL !== 'COLE_AQUI_A_URL_DO_SEU_APPS_SCRIPT') {
       fetch(`${SCRIPT_URL}?date=${date}`)
         .then(r => r.json())
         .then(renderPainel)
         .catch(() => {
-          // Fallback para localStorage
           renderPainel(montarPainelLocal(date));
-          document.getElementById('last-update').textContent = 'Dados locais — ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+          document.getElementById('last-update').textContent = 'Banco de dados — ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
         });
     } else {
       // Usa localStorage diretamente
       renderPainel(montarPainelLocal(date));
-            document.getElementById('last-update').textContent = 'Dados locais — ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+            document.getElementById('last-update').textContent = 'Banco de dados — ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
     }
-  }
-
-  function renderConsolidadoRegional() {
-    const mesEl = document.getElementById('painel-mes-cons');
-    const mes   = mesEl ? mesEl.value : new Date().toISOString().slice(0,7);
-    const tbody = document.getElementById('tbody-consolidado-regional');
-    if (!mes) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#aaa;padding:14px">Selecione o mês</td></tr>'; return; }
-
-    const AGENCIAS = ['Alphaville','Lapa','Osasco','Santana','Vila Maria','Sorocaba','Tatuape','Cidade Jardim','Santo Amaro','JK','Itaim','Sumaré'];
-    const prodRows = JSON.parse(localStorage.getItem(PROD_KEY)||'[]').filter(r => r.date && r.date.startsWith(mes));
-    const diarRows = JSON.parse(localStorage.getItem(STORE_KEY)||'[]').filter(r => r.date && r.date.startsWith(mes));
-
-    const byAg = {};
-    prodRows.forEach(r => {
-      if (!byAg[r.agency]) byAg[r.agency] = { pipe:0, liq:0, dias:new Set(), netProjMes:0 };
-      byAg[r.agency].pipe += (Number(r.prodDesconto)||0)+(Number(r.antDemais)||0)+(Number(r.longoPrazo)||0);
-      byAg[r.agency].liq  += Number(r.liquidacaoTotal)||0;
-      byAg[r.agency].dias.add(r.date);
-    });
-
-    // STORE_KEY — dias sem gerentes e netProjMes
-    const diasComGer = {};
-    prodRows.forEach(r => { if(!diasComGer[r.agency]) diasComGer[r.agency]=new Set(); diasComGer[r.agency].add(r.date); });
-    diarRows.forEach(r => {
-      if (!diasComGer[r.agency] || !diasComGer[r.agency].has(r.date)) {
-        if (!byAg[r.agency]) byAg[r.agency] = { pipe:0, liq:0, dias:new Set(), netProjMes:0 };
-        byAg[r.agency].pipe += (Number(r.prodDesconto)||0)+(Number(r.antDemais)||0)+(Number(r.longoPrazo)||0);
-        byAg[r.agency].liq  += Number(r.liquidacaoTotal)||0;
-        byAg[r.agency].dias.add(r.date);
-      }
-      // Sempre pega netProjMes mais recente
-      if (r.netProjMes) byAg[r.agency].netProjMes = Number(r.netProjMes)||0;
-    });
-
-    let totPipe=0, totLiq=0, totNet=0;
-    const rows = AGENCIAS.map(ag => {
-      const d = byAg[ag];
-      if (!d) return '<tr style="opacity:0.4"><td class="ag">'+ag+'</td><td colspan="4" style="text-align:center;color:#aaa;font-size:11px">sem lançamentos</td></tr>';
-      const np  = d.netProjMes || (d.pipe + d.liq);
-      const nc  = np >= 0 ? 'pos' : 'neg';
-      totPipe += d.pipe; totLiq += d.liq; totNet += np;
-      return '<tr>'+
-        '<td class="ag" style="font-weight:700">'+ag+'</td>'+
-        '<td class="auto-val" style="text-align:right">'+fmtBRL(d.pipe)+'</td>'+
-        '<td style="text-align:right;color:#b92d2d">'+fmtBRL(d.liq)+'</td>'+
-        '<td class="'+nc+'" style="text-align:right;font-weight:700">'+fmtBRL(np)+'</td>'+
-        '<td style="text-align:center;color:#888">'+d.dias.size+'d</td>'+
-        '</tr>';
-    }).join('');
-
-    const ncT = totNet>=0?'#90ee90':'#ff9999';
-    tbody.innerHTML = rows +
-      '<tr style="background:#1a3a6e;color:#fff;font-weight:700">'+
-      '<td>REGIONAL</td>'+
-      '<td style="text-align:right">'+fmtBRL(totPipe)+'</td>'+
-      '<td style="text-align:right">'+fmtBRL(totLiq)+'</td>'+
-      '<td style="text-align:right;color:'+ncT+'">'+fmtBRL(totNet)+'</td>'+
-      '<td></td></tr>';
-  }
-
-  function renderConsolidadoRegionalInit() {
-    const el = document.getElementById('painel-mes-cons');
-    if (el && !el.value) el.value = new Date().toISOString().slice(0,7);
-    renderConsolidadoRegional();
   }
 
   function calcSaldos(a) {
@@ -3245,8 +3492,8 @@
   function renderRankingGerentes() {
     const date = (document.getElementById('painel-date')||{value:''}).value;
     const mes  = date ? date.slice(0,7) : new Date().toISOString().slice(0,7);
-    const prodStore = JSON.parse(localStorage.getItem(PROD_KEY)  || '[]');
-    const diarStore = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+    const prodStore = JSON.parse(lsGetItem(PROD_KEY)  || '[]');
+    const diarStore = JSON.parse(lsGetItem(STORE_KEY) || '[]');
 
     // Agrupa por gerente — acumula VOP e Net do mês
     const byGer = {};
@@ -3315,8 +3562,8 @@
     const mes  = date ? date.slice(0,7) : new Date().toISOString().slice(0,7);
 
     // ── Quartil Gerentes — usa EXATAMENTE a mesma lógica do detalhamento mensal ──
-    const prodStore    = JSON.parse(localStorage.getItem(PROD_KEY)  || '[]');
-    const diarStore    = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+    const prodStore    = JSON.parse(lsGetItem(PROD_KEY)  || '[]');
+    const diarStore    = JSON.parse(lsGetItem(STORE_KEY) || '[]');
     const prodMes      = prodStore.filter(r => r.date && r.date.startsWith(mes));
     const diarMes      = diarStore.filter(r => r.date && r.date.startsWith(mes));
 
@@ -3394,7 +3641,7 @@
     }).join('');
 
     const fmtV = v => {
-      const n = Math.abs(v); 
+      const n = Math.abs(v);
       return n>=1e6?'R$'+(n/1e6).toFixed(1)+'M':n>=1e3?'R$'+(n/1e3).toFixed(0)+'k':'R$'+n.toFixed(0);
     };
     // Lista detalhada por quartil
@@ -3571,7 +3818,7 @@
 
     // ── Diário ──
     // npMes: replica exatamente o netProjMes salvo no STORE_KEY (mesmo valor do Lançar Produção)
-    const _storeAll = JSON.parse(localStorage.getItem(STORE_KEY)||'[]');
+    const _storeAll = JSON.parse(lsGetItem(STORE_KEY)||'[]');
     const _paDate   = document.getElementById('painel-date').value;
     function npMes(agency) {
       const r = _storeAll.find(function(x){ return x.agency===agency && x.date===_paDate; });
@@ -3598,7 +3845,7 @@
     });
 
     // Net Proj Mês regional = soma de todas as agências
-    const _saldosTodos = JSON.parse(localStorage.getItem(SALDOS_KEY)||'{}');
+    const _saldosTodos = JSON.parse(lsGetItem(SALDOS_KEY)||'{}');
     const _netProjReg  = agencias.filter(a=>a.enviado).reduce((s,a) => {
       const _sAg = _saldosTodos[a.agency]||{};
       const _ac  = calcAcumuladoMes(a.agency);
@@ -3667,14 +3914,14 @@
     var liq  = parseFloat(inps[3]&&inps[3].value)||0;
     var pipe = desc+ant+lp, net = pipe+liq;
 
-    var store = JSON.parse(localStorage.getItem(PROD_KEY)||'[]');
+    var store = JSON.parse(lsGetItem(PROD_KEY)||'[]');
     var idx = store.findIndex(function(r){ return r.date===date && r.agency===agency && r.gerente===gerente; });
     if (idx>=0) {
       store[idx] = Object.assign({}, store[idx], {prodDesconto:desc,antDemais:ant,longoPrazo:lp,liquidacaoTotal:liq,pipe:pipe,netProjetado:net});
     } else {
       store.push({agency:agency,gerente:gerente,date:date,prodDesconto:desc,antDemais:ant,longoPrazo:lp,liquidacaoTotal:liq,pipe:pipe,netProjetado:net});
     }
-    localStorage.setItem(PROD_KEY, JSON.stringify(store));
+    lsSetItem(PROD_KEY, JSON.stringify(store));
 
     // Volta visualização
     tr.querySelectorAll('.hval').forEach(function(s,i){
@@ -3708,9 +3955,9 @@
     msg.innerHTML = 'Excluir lançamento de <strong>' + gerente + '</strong> em <strong>' + d+'/'+m+'/'+y + '</strong>?';
     btn.onclick = function() {
       modal.style.display = 'none';
-      let store = JSON.parse(localStorage.getItem(PROD_KEY) || '[]');
+      let store = JSON.parse(lsGetItem(PROD_KEY) || '[]');
       store = store.filter(r => !(r.date === date && r.agency === agency && r.gerente === gerente));
-      localStorage.setItem(PROD_KEY, JSON.stringify(store));
+      lsSetItem(PROD_KEY, JSON.stringify(store));
       showToast('🗑 Removido!');
       renderGerentesAgencia();
       renderProdutividade();
@@ -3722,9 +3969,9 @@
   function inspecionarDados() {
     const date = document.getElementById('painel-date').value;
     const mes  = date ? date.slice(0,7) : new Date().toISOString().slice(0,7);
-    const prod = JSON.parse(localStorage.getItem(PROD_KEY) || '[]').filter(r => r.date && r.date.startsWith(mes));
-    const diar = JSON.parse(localStorage.getItem(STORE_KEY) || '[]').filter(r => r.date && r.date.startsWith(mes));
-    
+    const prod = JSON.parse(lsGetItem(PROD_KEY) || '[]').filter(r => r.date && r.date.startsWith(mes));
+    const diar = JSON.parse(lsGetItem(STORE_KEY) || '[]').filter(r => r.date && r.date.startsWith(mes));
+   
     let msg = '=== PROD_KEY (aba Produtividade) ===\n';
     prod.forEach(r => {
       const pipe = (Number(r.prodDesconto)||0)+(Number(r.antDemais)||0)+(Number(r.longoPrazo)||0);
@@ -3760,10 +4007,10 @@
     var pipe = d + a + l;
     var net  = pipe + q;
     var pay  = { agency:ag, gerente:ger, date:dt, prodDesconto:d, antDemais:a, longoPrazo:l, liquidacaoTotal:q, pipe:pipe, netProjetado:net };
-    var store = JSON.parse(localStorage.getItem('lancamentos_prod_gerente') || '[]');
+    var store = JSON.parse(lsGetItem('lancamentos_prod_gerente') || '[]');
     store = store.filter(function(r) { return !(r.agency===ag && r.gerente===ger && r.date===dt); });
     store.push(pay);
-    localStorage.setItem('lancamentos_prod_gerente', JSON.stringify(store));
+    lsSetItem('lancamentos_prod_gerente', JSON.stringify(store));
     tr.style.background = '#e8f5f0';
     showToast('✅ ' + ger + ' salvo!');
     renderGerentesAgencia();
@@ -3798,10 +4045,10 @@
       var net  = pipe + liq;
       var payload = { agency:agency, gerente:gerente, date:date, prodDesconto:desc, antDemais:ant, longoPrazo:lp, liquidacaoTotal:liq, pipe:pipe, netProjetado:net };
 
-      var store = JSON.parse(localStorage.getItem('lancamentos_prod_gerente') || '[]');
+      var store = JSON.parse(lsGetItem('lancamentos_prod_gerente') || '[]');
       store = store.filter(function(r){ return !(r.agency===agency && r.gerente===gerente && r.date===date); });
       store.push(payload);
-      localStorage.setItem('lancamentos_prod_gerente', JSON.stringify(store));
+      lsSetItem('lancamentos_prod_gerente', JSON.stringify(store));
 
       tr.style.background = '#e8f5f0';
       btn.textContent = '✅ Salvo';
@@ -3856,25 +4103,25 @@
 
   function fecharMes(mes) {
     // Arquiva no TRIM_KEY
-    const historico = JSON.parse(localStorage.getItem(TRIM_KEY) || '{}');
+    const historico = JSON.parse(lsGetItem(TRIM_KEY) || '{}');
     historico[mes] = {
-      lancamentos: JSON.parse(localStorage.getItem(STORE_KEY) || '[]').filter(r => r.date && r.date.startsWith(mes)),
-      prodGerentes: JSON.parse(localStorage.getItem(PROD_KEY) || '[]').filter(r => r.date && r.date.startsWith(mes)),
-      saldos: JSON.parse(localStorage.getItem(SALDOS_KEY) || '{}'),
+      lancamentos: JSON.parse(lsGetItem(STORE_KEY) || '[]').filter(r => r.date && r.date.startsWith(mes)),
+      prodGerentes: JSON.parse(lsGetItem(PROD_KEY) || '[]').filter(r => r.date && r.date.startsWith(mes)),
+      saldos: JSON.parse(lsGetItem(SALDOS_KEY) || '{}'),
       archivedAt: new Date().toISOString()
     };
-    localStorage.setItem(TRIM_KEY, JSON.stringify(historico));
+    lsSetItem(TRIM_KEY, JSON.stringify(historico));
 
     // Limpa dados do mês
-    let store = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+    let store = JSON.parse(lsGetItem(STORE_KEY) || '[]');
     store = store.filter(r => !r.date || !r.date.startsWith(mes));
-    localStorage.setItem(STORE_KEY, JSON.stringify(store));
+    lsSetItem(STORE_KEY, JSON.stringify(store));
 
-    let prod = JSON.parse(localStorage.getItem(PROD_KEY) || '[]');
+    let prod = JSON.parse(lsGetItem(PROD_KEY) || '[]');
     prod = prod.filter(r => !r.date || !r.date.startsWith(mes));
-    localStorage.setItem(PROD_KEY, JSON.stringify(prod));
+    lsSetItem(PROD_KEY, JSON.stringify(prod));
 
-    localStorage.removeItem(SALDOS_KEY);
+    lsSetItem(SALDOS_KEY, JSON.stringify({}));
 
     showToast('✅ Mês ' + mes + ' arquivado! Campos limpos para o novo mês.');
     clearForm();
@@ -3886,7 +4133,7 @@
     const cont = document.getElementById('trim-content');
     if (!sel) { cont.innerHTML = '<div style="color:#aaa;font-size:12px;text-align:center;padding:16px">Selecione um mês</div>'; return; }
 
-    const historico = JSON.parse(localStorage.getItem(TRIM_KEY) || '{}');
+    const historico = JSON.parse(lsGetItem(TRIM_KEY) || '{}');
     const dados = historico[sel];
     if (!dados) { cont.innerHTML = '<div style="color:#aaa;text-align:center;padding:16px">Sem dados para ' + sel + '</div>'; return; }
 
@@ -3948,7 +4195,7 @@
   function popularSelectTrimestre() {
     const sel = document.getElementById('trim-mes-sel');
     if (!sel) return;
-    const historico = JSON.parse(localStorage.getItem(TRIM_KEY) || '{}');
+    const historico = JSON.parse(lsGetItem(TRIM_KEY) || '{}');
     const meses = Object.keys(historico).sort().reverse();
     sel.innerHTML = '<option value="">Selecione o mês</option>';
     meses.forEach(function(m) {
@@ -3971,7 +4218,7 @@
     }
 
     const mes    = (document.getElementById('prod-mes') ? document.getElementById('prod-mes').value : '') || new Date().toISOString().slice(0,7);
-    const saldos = JSON.parse(localStorage.getItem(SALDOS_KEY) || '{}');
+    const saldos = JSON.parse(lsGetItem(SALDOS_KEY) || '{}');
     const acum   = calcAcumuladoMes(ag, mes);
     const sAg    = saldos[ag] || {};
 
@@ -4059,6 +4306,240 @@
       return total + netProj;
     }, 0);
   }
+
+
+
+
+  function renderGerentesInline(ag) {
+    const lista = document.getElementById('ger-inline-lista');
+    const lbl   = document.getElementById('ger-inline-ag-nome');
+    if (!lista) return;
+    if (!ag) {
+      lista.innerHTML = '<div style="color:#aaa;font-size:11px;text-align:center;padding:8px">Selecione a agência para ver os gerentes</div>';
+      if (lbl) lbl.textContent = '';
+      return;
+    }
+    if (lbl) lbl.textContent = ag;
+    const gers = gerentesDaAgencia(ag);
+    if (!gers.length) {
+      lista.innerHTML = '<div style="color:#aaa;font-size:11px;text-align:center;padding:8px">Nenhum gerente cadastrado. Adicione abaixo.</div>';
+      return;
+    }
+    lista.innerHTML = gers.map(g =>
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #f0f2f7">' +
+        '<span style="font-size:12px;color:#1a3a6e">👤 ' + g.nome + '</span>' +
+        '<button class="btn-gd-del" onclick="removerGerenteInline(\'' + ag + '\',\'' + g.nome + '\')" title="Remover" style="font-size:10px;padding:2px 6px">🗑</button>' +
+      '</div>'
+    ).join('');
+  }
+
+  function adicionarGerenteInline() {
+    const ag   = document.getElementById('agency-select').value;
+    const nome = (document.getElementById('ger-inline-nome')||{value:''}).value.trim();
+    if (!ag)   { showToast('⚠️ Selecione a agência primeiro!', true); return; }
+    if (!nome) { showToast('⚠️ Digite o nome do gerente!', true); return; }
+    const lista = carregarGerentes();
+    const existe = lista.find(g => g.agencia === ag && g.nome.toLowerCase() === nome.toLowerCase());
+    if (existe) { showToast('⚠️ Gerente já cadastrado!', true); return; }
+    lista.push({ agencia: ag, nome: nome });
+    salvarGerentes(lista);
+    const nomeEl = document.getElementById('ger-inline-nome');
+    if (nomeEl) nomeEl.value = '';
+    showToast('✅ ' + nome + ' adicionado!');
+    renderGerentesInline(ag);
+    if (typeof atualizarPainelGerentes === 'function') atualizarPainelGerentes();
+  }
+
+  function removerGerenteInline(ag, nome) {
+    const modal = document.getElementById('del-modal');
+    const msg   = document.getElementById('del-modal-msg');
+    const mbtn  = document.getElementById('del-modal-btn');
+    msg.innerHTML = 'Remover <strong>' + nome + '</strong> de ' + ag + '?';
+    mbtn.onclick = function() {
+      modal.style.display = 'none';
+      let lista = carregarGerentes().filter(g => !(g.agencia===ag && g.nome===nome));
+      salvarGerentes(lista);
+      showToast('🗑 ' + nome + ' removido!');
+      renderGerentesInline(ag);
+      if (typeof atualizarPainelGerentes === 'function') atualizarPainelGerentes();
+    };
+    modal.style.display = 'flex';
+  }
+
+  function atualizarCamposComGerentes() {
+    const ag   = (document.getElementById('agency-select')||{value:''}).value;
+    const date = (document.getElementById('ref-date')||{value:''}).value;
+    if (!ag || !date) return;
+    const prod = JSON.parse(lsGetItem('lancamentos_prod_gerente')||'[]')
+      .filter(function(r){ return r.agency===ag && r.date===date; });
+    if (!prod.length) return;
+    const gerDesc = prod.reduce(function(s,r){ return s+(Number(r.prodDesconto)||0); }, 0);
+    const gerAnt  = prod.reduce(function(s,r){ return s+(Number(r.antDemais)||0); }, 0);
+    const gerLp   = prod.reduce(function(s,r){ return s+(Number(r.longoPrazo)||0); }, 0);
+    const gerLiq  = prod.reduce(function(s,r){ return s+(Number(r.liquidacaoTotal)||0); }, 0);
+    function setField(id, val) { const el=document.getElementById(id); if(el&&val!==0) el.value=val; }
+    setField('d-desc', gerDesc); setField('d-ant', gerAnt);
+    setField('d-lp', gerLp);     setField('d-liq', gerLiq);
+    ['d-desc','d-ant','d-lp','d-liq'].forEach(function(id) {
+      const el = document.getElementById(id);
+      if (el) { el.style.background='#f0fff8'; el.style.borderColor='#0d7a5f'; }
+    });
+    calcTudo();
+  }
+
+  function atualizarPainelGerentes() {
+    const ag   = (document.getElementById('agency-select')||{value:''}).value;
+    const date = (document.getElementById('ref-date')||{value:''}).value;
+    const painel = document.getElementById('painel-gerentes-lancar');
+    if (!painel) return;
+    if (!ag || !date) { painel.style.display='none'; return; }
+    const gers = gerentesDaAgencia(ag);
+    if (!gers.length) { painel.style.display='none'; return; }
+    painel.style.display = 'block';
+    const pgNome = document.getElementById('pg-agencia-nome');
+    if (pgNome) pgNome.textContent = ag;
+    const pgData = document.getElementById('pg-data-nome');
+    if (pgData) { const [y,m,d]=date.split('-'); pgData.textContent=d+'/'+m+'/'+y; }
+    const prod = JSON.parse(lsGetItem('lancamentos_prod_gerente')||'[]')
+      .filter(function(r){ return r.agency===ag && r.date===date; });
+    const salvoMap = {};
+    prod.forEach(function(r){ salvoMap[r.gerente]=r; });
+    var totVop=0, totNet=0, rows='';
+    gers.forEach(function(g) {
+      const s=salvoMap[g.nome], saved=!!s;
+      const desc=s?(s.prodDesconto||0):'', ant=s?(s.antDemais||0):'';
+      const lp=s?(s.longoPrazo||0):'', liq=s?(s.liquidacaoTotal||0):'';
+      const vop=s?((Number(s.prodDesconto)||0)+(Number(s.antDemais)||0)+(Number(s.longoPrazo)||0)):0;
+      const net=s?(vop+(Number(s.liquidacaoTotal)||0)):0;
+      const nc=net>=0?'#0d7a5f':'#b92d2d';
+      if(saved){totVop+=vop;totNet+=net;}
+      rows+='<tr style="'+(saved?'background:#f0fff8':'')+'">' +
+        '<td class="ag">'+g.nome+(saved?' ✅':'')+' </td>' +
+        '<td><input class="prod-input pg-desc" type="number" placeholder="0" value="'+desc+'" oninput="calcPgRow(this)"></td>' +
+        '<td><input class="prod-input pg-ant"  type="number" placeholder="0" value="'+ant+'"  oninput="calcPgRow(this)"></td>' +
+        '<td><input class="prod-input pg-lp"   type="number" placeholder="0" value="'+lp+'"   oninput="calcPgRow(this)"></td>' +
+        '<td><input class="prod-input pg-liq"  type="number" placeholder="0" value="'+liq+'"  oninput="calcPgRow(this)"></td>' +
+        '<td class="auto-val pg-vop" style="text-align:right">'+(saved?fmtBRL(vop):'R$ 0')+'</td>' +
+        '<td style="text-align:right;font-weight:700;color:'+nc+'" class="pg-net">'+(saved?fmtBRL(net):'R$ 0')+'</td>' +
+        '<td style="text-align:center;white-space:nowrap">' +
+          '<button class="btn-salvar-ger" data-agency="'+ag+'" data-gerente="'+g.nome+'" data-date="'+date+'" onclick="salvarPgGerente(this)">Salvar</button> ' +
+          '<button class="btn-gd-del" data-agency="'+ag+'" data-gerente="'+g.nome+'" data-date="'+date+'" onclick="removerPgGerente(this)">🗑</button>' +
+        '</td></tr>';
+    });
+    const tbody = document.getElementById('tbody-gerentes-lancar');
+    if (tbody) tbody.innerHTML = rows;
+    const totEl = document.getElementById('pg-total');
+    if (totVop>0 && totEl) {
+      totEl.style.display='block';
+      const tvEl=document.getElementById('pg-total-vop'); if(tvEl) tvEl.textContent=fmtBRL(totVop);
+      const tnEl=document.getElementById('pg-total-net'); if(tnEl){tnEl.textContent=fmtBRL(totNet);tnEl.style.color=totNet>=0?'#0d7a5f':'#b92d2d';}
+    } else if (totEl) { totEl.style.display='none'; }
+    calcTudo();
+  }
+
+  function calcPgRow(input) {
+    const tr=input.closest('tr'); if(!tr) return;
+    const desc=parseFloat(tr.querySelector('.pg-desc')?.value)||0;
+    const ant =parseFloat(tr.querySelector('.pg-ant')?.value) ||0;
+    const lp  =parseFloat(tr.querySelector('.pg-lp')?.value)  ||0;
+    const liq =parseFloat(tr.querySelector('.pg-liq')?.value) ||0;
+    const vop=desc+ant+lp, net=vop+liq;
+    const vEl=tr.querySelector('.pg-vop'); if(vEl) vEl.textContent=fmtBRL(vop);
+    const nEl=tr.querySelector('.pg-net'); if(nEl){nEl.textContent=fmtBRL(net);nEl.style.color=net>=0?'#0d7a5f':'#b92d2d';}
+    calcTudo();
+  }
+
+  function salvarPgGerente(btn) {
+    const tr=btn.closest('tr'), ag=btn.getAttribute('data-agency');
+    const gerente=btn.getAttribute('data-gerente'), date=btn.getAttribute('data-date');
+    if(!ag||!gerente||!date){showToast('⚠️ Dados incompletos',true);return;}
+    const desc=parseFloat(tr.querySelector('.pg-desc')?.value)||0;
+    const ant =parseFloat(tr.querySelector('.pg-ant')?.value) ||0;
+    const lp  =parseFloat(tr.querySelector('.pg-lp')?.value)  ||0;
+    const liq =parseFloat(tr.querySelector('.pg-liq')?.value) ||0;
+    const pipe=desc+ant+lp, net=pipe+liq;
+    const payload={agency:ag,gerente,date,prodDesconto:desc,antDemais:ant,longoPrazo:lp,liquidacaoTotal:liq,pipe,netProjetado:net};
+    let store=JSON.parse(lsGetItem('lancamentos_prod_gerente')||'[]');
+    store=store.filter(r=>!(r.agency===ag&&r.gerente===gerente&&r.date===date));
+    store.push(payload);
+    lsSetItem('lancamentos_prod_gerente',JSON.stringify(store));
+    showToast('✅ '+gerente+' salvo!');
+    atualizarPainelGerentes();
+    atualizarCamposComGerentes();
+    renderGerentesAgencia && renderGerentesAgencia();
+    renderProdutividade && renderProdutividade();
+  }
+
+  function removerPgGerente(btn) {
+    const ag=btn.getAttribute('data-agency'), gerente=btn.getAttribute('data-gerente'), date=btn.getAttribute('data-date');
+    const modal=document.getElementById('del-modal'), msg=document.getElementById('del-modal-msg'), mbtn=document.getElementById('del-modal-btn');
+    msg.innerHTML='Remover lançamento de <strong>'+gerente+'</strong>?';
+    mbtn.onclick=function(){
+      modal.style.display='none';
+      excluirSincronizado(ag,date,gerente);
+      showToast('🗑 Removido!');
+      atualizarPainelGerentes();
+      atualizarCamposComGerentes();
+      renderGerentesAgencia&&renderGerentesAgencia();
+      renderProdutividade&&renderProdutividade();
+    };
+    modal.style.display='flex';
+  }
+
+
+  function renderConsolidadoRegional() {
+    const mesEl = document.getElementById('painel-mes-cons');
+    const mes   = mesEl ? mesEl.value : new Date().toISOString().slice(0,7);
+    const tbody = document.getElementById('tbody-consolidado-regional');
+    if (!tbody) return;
+    if (!mes) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#aaa;padding:14px">Selecione o mês</td></tr>'; return; }
+    const AGENCIAS = ['Alphaville','Lapa','Osasco','Santana','Vila Maria','Sorocaba','Tatuape','Cidade Jardim','Santo Amaro','JK','Itaim','Sumaré'];
+    const prodRows = JSON.parse(lsGetItem(PROD_KEY)||'[]').filter(r => r.date && r.date.startsWith(mes));
+    const diarRows = JSON.parse(lsGetItem(STORE_KEY)||'[]').filter(r => r.date && r.date.startsWith(mes));
+    const byAg = {};
+    prodRows.forEach(r => {
+      if (!byAg[r.agency]) byAg[r.agency] = { pipe:0, liq:0, dias:new Set(), netProjMes:0 };
+      byAg[r.agency].pipe += (Number(r.prodDesconto)||0)+(Number(r.antDemais)||0)+(Number(r.longoPrazo)||0);
+      byAg[r.agency].liq  += Number(r.liquidacaoTotal)||0;
+      byAg[r.agency].dias.add(r.date);
+    });
+    const diasComGer = {};
+    prodRows.forEach(r => { if(!diasComGer[r.agency]) diasComGer[r.agency]=new Set(); diasComGer[r.agency].add(r.date); });
+    diarRows.forEach(r => {
+      if (!diasComGer[r.agency] || !diasComGer[r.agency].has(r.date)) {
+        if (!byAg[r.agency]) byAg[r.agency] = { pipe:0, liq:0, dias:new Set(), netProjMes:0 };
+        byAg[r.agency].pipe += (Number(r.prodDesconto)||0)+(Number(r.antDemais)||0)+(Number(r.longoPrazo)||0);
+        byAg[r.agency].liq  += Number(r.liquidacaoTotal)||0;
+        byAg[r.agency].dias.add(r.date);
+      }
+      if (r.netProjMes) byAg[r.agency].netProjMes = Number(r.netProjMes)||0;
+    });
+    let totPipe=0, totLiq=0, totNet=0;
+    const rows = AGENCIAS.map(ag => {
+      const d = byAg[ag];
+      if (!d) return '<tr style="opacity:0.4"><td class="ag">'+ag+'</td><td colspan="4" style="text-align:center;color:#aaa;font-size:11px">sem lançamentos</td></tr>';
+      const np = d.netProjMes || (d.pipe + d.liq);
+      const nc = np >= 0 ? 'pos' : 'neg';
+      totPipe += d.pipe; totLiq += d.liq; totNet += np;
+      return '<tr><td class="ag" style="font-weight:700">'+ag+'</td>'+
+        '<td class="auto-val" style="text-align:right">'+fmtBRL(d.pipe)+'</td>'+
+        '<td style="text-align:right;color:#b92d2d">'+fmtBRL(d.liq)+'</td>'+
+        '<td class="'+nc+'" style="text-align:right;font-weight:700">'+fmtBRL(np)+'</td>'+
+        '<td style="text-align:center;color:#888">'+d.dias.size+'d</td></tr>';
+    }).join('');
+    const ncT = totNet>=0?'#90ee90':'#ff9999';
+    tbody.innerHTML = rows + '<tr style="background:#1a3a6e;color:#fff;font-weight:700">'+
+      '<td>REGIONAL</td><td style="text-align:right">'+fmtBRL(totPipe)+'</td>'+
+      '<td style="text-align:right">'+fmtBRL(totLiq)+'</td>'+
+      '<td style="text-align:right;color:'+ncT+'">'+fmtBRL(totNet)+'</td><td></td></tr>';
+  }
+
+  function renderConsolidadoRegionalInit() {
+    const el = document.getElementById('painel-mes-cons');
+    if (el && !el.value) el.value = new Date().toISOString().slice(0,7);
+    renderConsolidadoRegional();
+  }
+
 
   function showToast(msg, isError) {
     const t = document.getElementById('toast');
