@@ -2100,64 +2100,123 @@
     } catch(e) {}
   }
 
-  async function sincronizarDoSupabase() {
+  // ── Lista de chaves espelhadas no banco (app_storage) ──────
+  const SUPA_KEYS = [STORE_KEY, GER_KEY, PROD_KEY, SALDOS_KEY];
+  // _supaSyncing: bloqueia replicação enquanto baixamos do banco para o localStorage
+  // (senão o setItem interceptado regrava no banco em loop)
+  let _supaSyncing = false;
+  // Debounce por chave para evitar flood de upserts
+  const _supaTimers = {};
+  const _supaPendingValues = {};
+
+  // Atualiza o status na tela
+  function _atualizarStatusSupa(texto, cor) {
+    const statusEl = document.getElementById('supa-status');
+    if (statusEl) statusEl.textContent = texto;
+    // Atualiza também o "Dados locais — HH:MM" do Painel Regional, se existir
+    const regStatus = document.getElementById('regional-status');
+    if (regStatus && cor === 'sync') {
+      const now = new Date();
+      const hh = String(now.getHours()).padStart(2,'0');
+      const mm = String(now.getMinutes()).padStart(2,'0');
+      regStatus.textContent = `Sincronizado com o banco — ${hh}:${mm}`;
+    }
+  }
+
+  // Baixa UMA chave do banco e popula o localStorage
+  async function _baixarChave(chave) {
     if (!_supaClient) return;
     try {
       const { data: row } = await _supaClient
         .from('app_storage')
         .select('valor')
-        .eq('chave', STORE_KEY)
-        .single();
-      if (row && row.valor) {
-        // valor pode vir como string JSON ou já como objeto/array
-        let store = row.valor;
-        if (typeof store === 'string') {
-          try { store = JSON.parse(store); } catch(_) { store = []; }
+        .eq('chave', chave)
+        .maybeSingle();
+      if (row && row.valor != null) {
+        let v = row.valor;
+        if (typeof v === 'string') {
+          try { v = JSON.parse(v); } catch(_) { /* mantém string */ }
         }
-        if (Array.isArray(store)) {
-          localStorage.setItem(STORE_KEY, JSON.stringify(store));
+        // Marca como syncing para o setItem interceptado NÃO replicar de volta
+        _supaSyncing = true;
+        try {
+          localStorage.setItem(chave, typeof v === 'string' ? v : JSON.stringify(v));
+        } finally {
+          _supaSyncing = false;
         }
       }
+    } catch(e) { console.warn('[Supabase] erro baixando ' + chave + ':', e); }
+  }
+
+  // Sobe UMA chave para o banco (com debounce de 400ms)
+  function _subirChave(chave, valorString) {
+    if (!_supaClient) return;
+    _supaPendingValues[chave] = valorString;
+    if (_supaTimers[chave]) clearTimeout(_supaTimers[chave]);
+    _supaTimers[chave] = setTimeout(async () => {
+      const raw = _supaPendingValues[chave];
+      delete _supaPendingValues[chave];
+      delete _supaTimers[chave];
+      try {
+        let parsed;
+        try { parsed = JSON.parse(raw); } catch(_) { parsed = raw; }
+        await _supaClient.from('app_storage').upsert({
+          chave: chave,
+          valor: parsed,
+          atualizado_em: new Date().toISOString()
+        }, { onConflict: 'chave' });
+      } catch(e) { console.warn('[Supabase] erro salvando ' + chave + ':', e); }
+    }, 400);
+  }
+
+  // Intercepta localStorage.setItem para replicar automaticamente as chaves rastreadas
+  (function instalarInterceptador() {
+    const origSetItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function(chave, valor) {
+      origSetItem.apply(this, arguments);
+      // Só replica se for a localStorage (não sessionStorage), uma das chaves rastreadas e não estamos sincronizando
+      if (this === window.localStorage && !_supaSyncing && SUPA_KEYS.indexOf(chave) !== -1) {
+        _subirChave(chave, valor);
+      }
+    };
+  })();
+
+  // Sincroniza TODAS as chaves do banco para o localStorage (chamada na abertura e no botão Atualizar)
+  async function sincronizarDoSupabase() {
+    if (!_supaClient) return;
+    try {
+      await Promise.all(SUPA_KEYS.map(k => _baixarChave(k)));
+      _atualizarStatusSupa('🟢 Online', 'sync');
     } catch(e) { console.warn('Sync Supabase erro:', e); }
   }
 
+  // Mantém compatibilidade — função antiga continua existindo, mas agora só dispara o setItem
+  // (que é interceptado e replicado no banco automaticamente).
   async function salvarNoSupabase(payload) {
-    if (!_supaClient) return;
+    if (!_supaClient || !payload) return;
     try {
-      // Lê o array atual da chave lancamentos_agencias
-      let store = [];
-      try {
-        const { data: row } = await _supaClient
-          .from('app_storage')
-          .select('valor')
-          .eq('chave', STORE_KEY)
-          .single();
-        if (row && row.valor) {
-          let v = row.valor;
-          if (typeof v === 'string') { try { v = JSON.parse(v); } catch(_) { v = []; } }
-          if (Array.isArray(v)) store = v;
-        }
-      } catch(_) {
-        // Se não existe ainda, parte de array vazio (mas tenta usar o local atual)
-        try { store = JSON.parse(localStorage.getItem(STORE_KEY) || '[]'); } catch(_) { store = []; }
-      }
-      // Atualiza ou insere o registro (match por agency + date)
+      let store = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+      if (!Array.isArray(store)) store = [];
       const idx = store.findIndex(r => r && r.agency === payload.agency && r.date === payload.date);
       if (idx >= 0) {
         store[idx] = Object.assign({}, store[idx], payload);
       } else {
         store.push(payload);
       }
-      // Grava de volta na mesma chave
-      await _supaClient.from('app_storage').upsert({
-        chave: STORE_KEY,
-        valor: store,
-        atualizado_em: new Date().toISOString()
-      }, { onConflict: 'chave' });
-      // Espelha no localStorage
+      // Esse setItem é interceptado e replica no banco automaticamente
       localStorage.setItem(STORE_KEY, JSON.stringify(store));
     } catch(e) { console.warn('Erro Supabase:', e); }
   }
+
+  // Botão "Atualizar" do Painel Regional força resync do banco
+  window.resyncDoBanco = async function() {
+    await sincronizarDoSupabase();
+    // Re-renderiza o painel regional se a função estiver disponível
+    if (typeof renderRegional === 'function') { try { renderRegional(); } catch(_) {} }
+    if (typeof atualizarDashTotal === 'function') {
+      try { atualizarDashTotal((document.getElementById('ref-date')||{value:today}).value||today); } catch(_) {}
+    }
+  };
 
   initSupabase();
   setInterval(() => atualizarDashTotal((document.getElementById('ref-date')||{value:today}).value||today), 30000);
@@ -3264,13 +3323,18 @@
     return { agencias, regional, pendentes, totalEnviadas, date };
   }
 
-  function carregarPainel() {
+  async function carregarPainel() {
     const date = document.getElementById('painel-date').value;
     const [y,m,d] = date.split('-');
     const _lblDate = document.getElementById('lbl-date-painel'); if(_lblDate) _lblDate.textContent = `${d}/${m}/${y}`;
     document.getElementById('last-update').textContent = 'Atualizando...';
 
-    // Tenta buscar do servidor; se não houver URL, usa localStorage
+    // Re-sincroniza do banco (se Supabase disponível) antes de renderizar
+    if (typeof _supaClient !== 'undefined' && _supaClient && typeof sincronizarDoSupabase === 'function') {
+      try { await sincronizarDoSupabase(); } catch(_) {}
+    }
+
+    // Tenta buscar do servidor; se não houver URL, usa localStorage (já sincronizado do banco)
     if (SCRIPT_URL && SCRIPT_URL !== 'COLE_AQUI_A_URL_DO_SEU_APPS_SCRIPT') {
       fetch(`${SCRIPT_URL}?date=${date}`)
         .then(r => r.json())
@@ -3278,12 +3342,12 @@
         .catch(() => {
           // Fallback para localStorage
           renderPainel(montarPainelLocal(date));
-          document.getElementById('last-update').textContent = 'Dados locais — ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+          document.getElementById('last-update').textContent = 'Sincronizado com o banco — ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
         });
     } else {
-      // Usa localStorage diretamente
+      // Usa localStorage (que foi populado do banco)
       renderPainel(montarPainelLocal(date));
-            document.getElementById('last-update').textContent = 'Dados locais — ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+      document.getElementById('last-update').textContent = 'Sincronizado com o banco — ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
     }
   }
 
