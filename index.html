@@ -2103,18 +2103,20 @@
   async function sincronizarDoSupabase() {
     if (!_supaClient) return;
     try {
-      const { data: regs } = await _supaClient.from('registros').select('*');
-      if (regs && regs.length) {
-        const store = regs.map(r => ({
-          agency: r.agency, date: r.date,
-          metaVopInicial: r.meta_vop, descInicial: r.desc_inicial,
-          quenteInicial: r.quente_inicial, arvInicial: r.arv_inicial,
-          liqInicial: r.liq_inicial, netDiaAnterior: r.net_dia_anterior,
-          prodDesconto: r.prod_desconto, antDemais: r.ant_demais,
-          longoPrazo: r.longo_prazo, liquidacaoTotal: r.liquidacao_total,
-          vopDia: r.vop_dia, netDia: r.net_dia, netProjMes: r.net_proj_mes
-        }));
-        localStorage.setItem(STORE_KEY, JSON.stringify(store));
+      const { data: row } = await _supaClient
+        .from('app_storage')
+        .select('valor')
+        .eq('chave', STORE_KEY)
+        .single();
+      if (row && row.valor) {
+        // valor pode vir como string JSON ou já como objeto/array
+        let store = row.valor;
+        if (typeof store === 'string') {
+          try { store = JSON.parse(store); } catch(_) { store = []; }
+        }
+        if (Array.isArray(store)) {
+          localStorage.setItem(STORE_KEY, JSON.stringify(store));
+        }
       }
     } catch(e) { console.warn('Sync Supabase erro:', e); }
   }
@@ -2122,15 +2124,38 @@
   async function salvarNoSupabase(payload) {
     if (!_supaClient) return;
     try {
-      await _supaClient.from('registros').upsert({
-        agency: payload.agency, date: payload.date,
-        meta_vop: payload.metaVopInicial, desc_inicial: payload.descInicial,
-        quente_inicial: payload.quenteInicial, arv_inicial: payload.arvInicial,
-        liq_inicial: payload.liqInicial, net_dia_anterior: payload.netDiaAnterior,
-        prod_desconto: payload.prodDesconto, ant_demais: payload.antDemais,
-        longo_prazo: payload.longoPrazo, liquidacao_total: payload.liquidacaoTotal,
-        vop_dia: payload.vopDia, net_dia: payload.netDia, net_proj_mes: payload.netProjMes
-      }, { onConflict: 'agency,date' });
+      // Lê o array atual da chave lancamentos_agencias
+      let store = [];
+      try {
+        const { data: row } = await _supaClient
+          .from('app_storage')
+          .select('valor')
+          .eq('chave', STORE_KEY)
+          .single();
+        if (row && row.valor) {
+          let v = row.valor;
+          if (typeof v === 'string') { try { v = JSON.parse(v); } catch(_) { v = []; } }
+          if (Array.isArray(v)) store = v;
+        }
+      } catch(_) {
+        // Se não existe ainda, parte de array vazio (mas tenta usar o local atual)
+        try { store = JSON.parse(localStorage.getItem(STORE_KEY) || '[]'); } catch(_) { store = []; }
+      }
+      // Atualiza ou insere o registro (match por agency + date)
+      const idx = store.findIndex(r => r && r.agency === payload.agency && r.date === payload.date);
+      if (idx >= 0) {
+        store[idx] = Object.assign({}, store[idx], payload);
+      } else {
+        store.push(payload);
+      }
+      // Grava de volta na mesma chave
+      await _supaClient.from('app_storage').upsert({
+        chave: STORE_KEY,
+        valor: store,
+        atualizado_em: new Date().toISOString()
+      }, { onConflict: 'chave' });
+      // Espelha no localStorage
+      localStorage.setItem(STORE_KEY, JSON.stringify(store));
     } catch(e) { console.warn('Erro Supabase:', e); }
   }
 
