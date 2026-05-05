@@ -640,6 +640,8 @@
       <span class="pill pill-blue" id="vg-mes-label">—</span>
       <button id="vg-senha-btn" class="btn btn-secondary btn-sm" onclick="vgPedirSenhaQuadroMensal()" style="margin-left:auto;font-size:11px;color:#1a3a6e;border-color:#1a3a6e" title="Liberar edição com senha">🔒 Desbloquear edição</button>
       <button id="vg-mensal-edit-btn" onclick="vgMensalToggleEdicaoGlobal()" style="display:none">_</button>
+      <button class="btn btn-primary btn-sm" onclick="vgSalvarEAtualizar()" style="font-size:11px;background:#0d7a5f;border-color:#0d7a5f" title="Salva os lançamentos digitados e atualiza os totais (Net Fechamento, linha Regional)">💾 Salvar e atualizar totais</button>
+      <span id="vg-pendente-aviso" style="display:none;align-items:center;gap:4px;font-size:11px;color:#a23026;font-weight:600;background:#fff5f5;padding:3px 8px;border-radius:4px;border:1px solid #f0c0c0">⚠️ Há alterações não atualizadas</span>
       <button class="btn btn-secondary btn-sm" onclick="vgLimparMesAbrir()" style="font-size:11px;color:#a23026;border-color:#a23026" title="Apaga TUDO do mês selecionado: lançamentos diários, saldos iniciais, overrides">🗑️ Limpar mês inteiro</button>
       <button class="btn btn-secondary btn-sm" onclick="vgLimparAgenciaAbrir()" style="font-size:11px;color:#a23026;border-color:#a23026" title="Apaga apenas os dados de uma agência específica no mês selecionado">🗑️ Limpar agência</button>
       <button class="btn btn-secondary btn-sm" onclick="vgLimparTudoAbrir()" style="font-size:11px;color:#fff;background:#a23026;border-color:#a23026" title="APAGA TUDO de TODAS as agências em TODOS os meses">🧹 Limpar TUDO</button>
@@ -2343,8 +2345,8 @@
     const novo = Object.assign({}, exist);
     novo[campo] = (valor === '' || valor === null || valor === undefined) ? 0 : Number(valor);
     salvarSaldosMensais(agency, novo, mes);
-    // Re-renderiza linha regional após qualquer edição
-    renderVisaoGeral();
+    // NÃO re-renderiza aqui — perde o foco. Use botão "💾 Salvar e atualizar".
+    _vgMarcarPendente();
   }
 
   // Persiste edição diária inline — atualiza o registro do dia/agência
@@ -2359,13 +2361,16 @@
       };
       store.push(row);
     }
-    row[campo] = (valor === '' || valor === null || valor === undefined) ? 0 : Number(valor);
+    // Para liquidacaoTotal, sempre salva como negativo (multiplica por -1)
+    let v = (valor === '' || valor === null || valor === undefined) ? 0 : Number(valor);
+    if (campo === 'liquidacaoTotal') v = -Math.abs(v);
+    row[campo] = v;
     // Recalcula vopDia e netDia
     row.vopDia = (Number(row.prodDesconto)||0) + (Number(row.antDemais)||0) + (Number(row.longoPrazo)||0);
     row.netDia = row.vopDia + (Number(row.liquidacaoTotal)||0);
     localStorage.setItem(STORE_KEY, JSON.stringify(store));
-    // Re-renderiza para atualizar Net Acumulado e Regional
-    renderVisaoGeral();
+    // NÃO re-renderiza aqui — perde o foco. Use botão "💾 Salvar e atualizar".
+    _vgMarcarPendente();
   }
 
   function _vgInputMensalCell(agency, campo, valor, agUser, mes) {
@@ -2377,16 +2382,61 @@
       return '<span style="display:inline-block;padding:4px 6px;font-size:11px;text-align:right;width:100%">' + fmtBRL(v) + '</span>';
     }
     return '<input type="number" class="vg-input" value="' + (v||'') + '" placeholder="0" '
-      + 'oninput="vgSalvarCampoMensal(\'' + agency.replace(/'/g,"\\'") + '\', \'' + campo + '\', this.value, \'' + mes + '\')" '
+      + 'onblur="vgSalvarCampoMensal(\'' + agency.replace(/'/g,"\\'") + '\', \'' + campo + '\', this.value, \'' + mes + '\')" '
       + 'style="width:100%;padding:4px 6px;border:1px solid #d0d5e0;border-radius:4px;font-size:11px;text-align:right">';
   }
 
+  // Set de linhas em edição no Quadro Diário — chave: "agency|date"
+  // Limpa ao re-renderizar (botão Salvar Prod) — edição é sempre temporária
+  let _vgLinhasEmEdicao = new Set();
+
+  function _vgChaveLinha(agency, date) { return agency + '|' + date; }
+
+  function vgEditarLinhaDiaria(agency, date) {
+    // Quadro Diário é livre — qualquer um pode lançar produção
+    _vgLinhasEmEdicao.add(_vgChaveLinha(agency, date));
+    // Re-renderiza só pra mostrar a linha como editável
+    if (typeof renderVisaoGeral === 'function') renderVisaoGeral();
+  }
+  window.vgEditarLinhaDiaria = vgEditarLinhaDiaria;
+
+  function vgConcluirLinhaDiaria(agency, date) {
+    _vgLinhasEmEdicao.delete(_vgChaveLinha(agency, date));
+    if (typeof renderVisaoGeral === 'function') renderVisaoGeral();
+  }
+  window.vgConcluirLinhaDiaria = vgConcluirLinhaDiaria;
+
+  // Limpa lançamento do dia para uma agência específica (zera os 5 campos)
+  function vgLimparLinhaDiaria(agency, date) {
+    if (!confirm('Limpar lançamento de ' + agency + ' em ' + _vgFmtData(date) + '?\n\nIsso zera Prod.Desconto, Ant/Demais, Longo Prazo, ARV e Liquidação daquele dia.')) return;
+    let store = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+    store = store.filter(r => !(r.agency === agency && r.date === date));
+    localStorage.setItem(STORE_KEY, JSON.stringify(store));
+    _vgLinhasEmEdicao.delete(_vgChaveLinha(agency, date));
+    showToast('🗑 Lançamento de ' + agency + ' limpo.');
+    if (typeof renderVisaoGeral === 'function') renderVisaoGeral();
+  }
+  window.vgLimparLinhaDiaria = vgLimparLinhaDiaria;
+
   function _vgInputDiarioCell(agency, date, campo, valor, agUser) {
-    // Liberado para qualquer usuário editar qualquer linha
     const v = Number(valor) || 0;
-    return '<input type="number" class="vg-input" value="' + (v||'') + '" placeholder="0" '
-      + 'oninput="vgSalvarCampoDiario(\'' + agency.replace(/'/g,"\\'") + '\', \'' + date + '\', \'' + campo + '\', this.value)" '
-      + 'style="width:100%;padding:4px 6px;border:1px solid #d0d5e0;border-radius:4px;font-size:11px;text-align:right">';
+    // Linha está em modo edição? (independente da senha — quem chamou já validou)
+    const emEdicao = _vgLinhasEmEdicao.has(_vgChaveLinha(agency, date));
+    if (!emEdicao) {
+      // Modo leitura — mostra o valor formatado (mesmo se senha desbloqueada)
+      const ehLiq = (campo === 'liquidacaoTotal');
+      const cor = ehLiq && v < 0 ? 'color:#b92d2d;' : '';
+      return '<span style="display:inline-block;padding:4px 6px;font-size:11px;text-align:right;width:100%;' + cor + '">' + fmtBRL(v) + '</span>';
+    }
+    // Liquidação é sempre negativa — exibe valor absoluto no input
+    const ehLiq = (campo === 'liquidacaoTotal');
+    const valorMostrar = ehLiq ? Math.abs(v) : v;
+    const placeholder = ehLiq ? '0 (negativo)' : '0';
+    const corBorda = ehLiq ? '#b92d2d' : '#e67e22';
+    const corBg    = ehLiq ? '#fff5f5' : '#fff8e1';
+    return '<input type="number" class="vg-input" value="' + (valorMostrar||'') + '" placeholder="' + placeholder + '" '
+      + 'onblur="vgSalvarCampoDiario(\'' + agency.replace(/'/g,"\\'") + '\', \'' + date + '\', \'' + campo + '\', this.value)" '
+      + 'style="width:100%;padding:4px 6px;border:2px solid ' + corBorda + ';background:' + corBg + ';border-radius:4px;font-size:11px;font-weight:700;text-align:right">';
   }
 
   function vgNavegarDia(delta) {
@@ -2479,7 +2529,8 @@
       all[mes][campo] = v;
     }
     localStorage.setItem(VG_CONS_KEY, JSON.stringify(all));
-    renderVisaoGeral();
+    // NÃO re-renderiza aqui — perde o foco. Use botão "💾 Salvar e atualizar".
+    _vgMarcarPendente();
   }
 
   // ── Helper: agrega lançamentos por agência+data do mês ──
@@ -2511,8 +2562,55 @@
       all[mes][agency][campo] = v;
     }
     localStorage.setItem(VG_AG_OVR_KEY, JSON.stringify(all));
-    // Não re-renderiza aqui pra não perder o foco do input enquanto digita
+    // NÃO re-renderiza aqui — perde o foco. Use botão "💾 Salvar e atualizar" para refresh.
+    _vgMarcarPendente();
   }
+
+  // Versão para Liquidação Total — converte automaticamente para negativo
+  function vgAgenciaSalvarCampoLiq(agency, mes, valor) {
+    let all = {};
+    try { all = JSON.parse(localStorage.getItem(VG_AG_OVR_KEY) || '{}'); } catch(_) {}
+    if (!all[mes]) all[mes] = {};
+    if (!all[mes][agency]) all[mes][agency] = {};
+    if (valor === '' || valor === null || valor === undefined) {
+      delete all[mes][agency]['liqTotal'];
+      if (!Object.keys(all[mes][agency]).length) delete all[mes][agency];
+      if (!Object.keys(all[mes]).length) delete all[mes];
+    } else {
+      // Sempre salva como negativo (multiplica por -1 se vier positivo)
+      const num = Math.abs(Number(valor) || 0);
+      all[mes][agency]['liqTotal'] = -num;
+    }
+    localStorage.setItem(VG_AG_OVR_KEY, JSON.stringify(all));
+    _vgMarcarPendente();
+  }
+  window.vgAgenciaSalvarCampoLiq = vgAgenciaSalvarCampoLiq;
+
+  // Mostra aviso "alterações pendentes" sem re-renderizar a tabela
+  function _vgMarcarPendente() {
+    const aviso = document.getElementById('vg-pendente-aviso');
+    if (aviso) aviso.style.display = 'inline-flex';
+  }
+  function _vgLimparPendente() {
+    const aviso = document.getElementById('vg-pendente-aviso');
+    if (aviso) aviso.style.display = 'none';
+  }
+  // Botão "💾 Salvar e atualizar" — re-renderiza tabela com os valores salvos
+  function vgSalvarEAtualizar() {
+    _vgLimparPendente();
+    if (typeof renderVisaoGeral === 'function') renderVisaoGeral();
+    showToast('✅ Tabela atualizada com seus lançamentos.');
+  }
+  window.vgSalvarEAtualizar = vgSalvarEAtualizar;
+
+  // Salva produção do Quadro Diário: limpa todas as linhas em edição e atualiza totais
+  function vgSalvarProd() {
+    _vgLinhasEmEdicao.clear();
+    _vgLimparPendente();
+    if (typeof renderVisaoGeral === 'function') renderVisaoGeral();
+    showToast('✅ Produção salva — totais atualizados.');
+  }
+  window.vgSalvarProd = vgSalvarProd;
 
   function vgMensalToggleEdicaoGlobal() {
     _vgMensalEditandoGlobal = !_vgMensalEditandoGlobal;
@@ -3102,7 +3200,17 @@
       regDia.netDia  += netDia;
       regDia.netAcum += netAcum;
 
-      rowsHtml += '<tr>'
+      // Botão Editar / Concluir + Limpar
+      const emEdicao = _vgLinhasEmEdicao.has(_vgChaveLinha(ag, date));
+      const trBg = emEdicao ? 'background:#fff8e1;' : '';
+      // Tem dados? Mostra botão Limpar ao lado do Editar
+      const temDados = (Number(r.prodDesconto)||0) + (Number(r.antDemais)||0) + (Number(r.longoPrazo)||0) + (Number(r.arvDia)||0) + (Number(r.liquidacaoTotal)||0) !== 0;
+      const btnLimpar = temDados ? ' <button onclick="vgLimparLinhaDiaria(\'' + ag.replace(/'/g,"\\'") + '\', \'' + date + '\')" style="background:#fff;color:#a23026;border:1px solid #f0c0c0;border-radius:4px;padding:3px 6px;font-size:10px;cursor:pointer;white-space:nowrap" title="Limpar lançamento desta linha">🗑</button>' : '';
+      const btnAcao = emEdicao
+        ? '<button onclick="vgConcluirLinhaDiaria(\'' + ag.replace(/'/g,"\\'") + '\', \'' + date + '\')" style="background:#0d7a5f;color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap" title="Concluir edição desta linha">✔ OK</button>' + btnLimpar
+        : '<button onclick="vgEditarLinhaDiaria(\'' + ag.replace(/'/g,"\\'") + '\', \'' + date + '\')" style="background:#fff;color:#1a3a6e;border:1px solid #1a3a6e;border-radius:4px;padding:3px 8px;font-size:10px;font-weight:600;cursor:pointer;white-space:nowrap" title="Editar esta linha">✏️ Editar</button>' + btnLimpar;
+
+      rowsHtml += '<tr style="' + trBg + '">'
         + '<td class="ag left">' + ag + (ag === agUser ? ' <span style="color:#1a3a6e;font-size:9px;font-weight:700">(você)</span>' : '') + '</td>'
         + '<td class="auto-val ' + cls(vop) + '">' + fmtBRL(vop) + '</td>'
         + '<td>' + _vgInputDiarioCell(ag, date, 'longoPrazo',      r.longoPrazo,      agUser) + '</td>'
@@ -3112,6 +3220,7 @@
         + '<td>' + _vgInputDiarioCell(ag, date, 'liquidacaoTotal', r.liquidacaoTotal, agUser) + '</td>'
         + '<td class="net-dia ' + cls(netDia) + '">' + fmtBRL(netDia) + '</td>'
         + '<td class="net-acum ' + cls(netAcum) + '">' + fmtBRL(netAcum) + '</td>'
+        + '<td style="text-align:center">' + btnAcao + '</td>'
         + '</tr>';
     });
     rowsHtml += '<tr style="background:#fff8e1;font-weight:700;border-top:2px solid #1a3a6e">'
@@ -3124,6 +3233,7 @@
       + '<td class="saldo ' + cls(regDia.liq) + '">' + fmtBRL(regDia.liq) + '</td>'
       + '<td class="net-dia ' + cls(regDia.netDia) + '">' + fmtBRL(regDia.netDia) + '</td>'
       + '<td class="net-acum ' + cls(regDia.netAcum) + '">' + fmtBRL(regDia.netAcum) + '</td>'
+      + '<td></td>'
       + '</tr>';
     return { rowsHtml, regDia };
   }
@@ -3262,9 +3372,19 @@
       const _cellSaldo = (campoOverride, valor, classe, hasOvr) => {
         if (editandoLinha) {
           const v = Number(valor) || 0;
-          return '<td><input type="number" value="' + (v||'') + '" placeholder="0" '
-            + 'oninput="vgAgenciaSalvarCampo(\'' + ag.replace(/'/g,"\\'") + '\', \'' + mes + '\', \'' + campoOverride + '\', this.value)" '
-            + 'style="width:100%;padding:4px 6px;border:2px solid #e67e22;background:#fff8e1;border-radius:4px;font-size:11px;font-weight:700;text-align:right"></td>';
+          // Liquidação Total é sempre negativa — exibe valor absoluto e o salvar inverte o sinal
+          const ehLiq = (campoOverride === 'liqTotal');
+          const valorMostrar = ehLiq ? Math.abs(v) : v;
+          // Wrapper salva e converte negativo automaticamente para liqTotal
+          const handler = ehLiq
+            ? 'vgAgenciaSalvarCampoLiq(\'' + ag.replace(/'/g,"\\'") + '\', \'' + mes + '\', this.value)'
+            : 'vgAgenciaSalvarCampo(\'' + ag.replace(/'/g,"\\'") + '\', \'' + mes + '\', \'' + campoOverride + '\', this.value)';
+          const placeholder = ehLiq ? '0 (negativo)' : '0';
+          const corBorda = ehLiq ? '#b92d2d' : '#e67e22';
+          const corBg    = ehLiq ? '#fff5f5' : '#fff8e1';
+          return '<td><input type="number" value="' + (valorMostrar||'') + '" placeholder="' + placeholder + '" '
+            + 'onblur="' + handler + '" '
+            + 'style="width:100%;padding:4px 6px;border:2px solid ' + corBorda + ';background:' + corBg + ';border-radius:4px;font-size:11px;font-weight:700;text-align:right"></td>';
         }
         return '<td class="' + classe + ' ' + cls(valor) + '">' + fmtBRL(valor) + tagOvr('', hasOvr) + '</td>';
       };
@@ -3321,7 +3441,9 @@
       // Renderiza só o quadro do dia selecionado
       const r = _vgRenderQuadroDiaSimples(dataSel, porAgData, netAcumByAg, agUser, /*acumular=*/false);
       cont.innerHTML = '<div class="card">'
-        + '<div class="card-title"><span>📆 Quadro Diário</span><span class="pill pill-green">' + _vgFmtData(dataSel) + '</span></div>'
+        + '<div class="card-title" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span>📆 Quadro Diário</span><span class="pill pill-green">' + _vgFmtData(dataSel) + '</span>'
+        + '<button class="btn btn-primary btn-sm" onclick="vgSalvarProd()" style="margin-left:auto;font-size:11px;background:#0d7a5f;border-color:#0d7a5f" title="Atualiza os totais do Quadro Diário (Net Acumulado, Regional)">💾 Salvar Prod</button>'
+        + '</div>'
         + '<div class="formula-box">'
         + '<span class="tag igual">VOP DIA</span> = Prod.Desc + Ant + LP &nbsp;|&nbsp; '
         + '<span class="tag igual">NET DIA</span> = VOP Dia + Liquidação &nbsp;|&nbsp; '
@@ -3338,6 +3460,7 @@
         + '<th class="th-deduz">Liquidação</th>'
         + '<th class="th-net">Net Dia</th>'
         + '<th class="th-net">Net Acumulado</th>'
+        + '<th class="th-ag">Ação</th>'
         + '</tr></thead>'
         + '<tbody>' + r.rowsHtml + '</tbody>'
         + '</table></div></div>';
@@ -3345,14 +3468,39 @@
     } else {
       // Modo "todos os dias": renderiza um card por dia em ordem
       const diasMes = Array.from(new Set(Object.keys(porAgData).map(k => k.split('|')[1]))).sort();
+      let html = '';
       if (!diasMes.length) {
-        cont.innerHTML = '<div class="card"><div style="text-align:center;color:#aaa;padding:24px">Nenhum lançamento neste mês ainda.</div></div>';
+        // Mês sem lançamentos — mostra um quadro diário em branco para o dia atual,
+        // pronto para começar a lançar produção
+        const hojeStr = today;
+        const r = _vgRenderQuadroDia(hojeStr, porAgData, netAcumByAg, agUser);
+        html += '<div class="card">'
+          + '<div class="card-title" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span>📆 Quadro Diário</span><span class="pill pill-green">' + _vgFmtData(hojeStr) + '</span><span class="pill pill-blue">Sem lançamentos no mês — pronto para começar</span>'
+          + '<button class="btn btn-primary btn-sm" onclick="vgSalvarProd()" style="margin-left:auto;font-size:11px;background:#0d7a5f;border-color:#0d7a5f" title="Atualiza os totais do Quadro Diário">💾 Salvar Prod</button>'
+          + '</div>'
+          + '<div class="tbl-wrap"><table>'
+          + '<thead><tr>'
+          + '<th class="left th-ag">Agência</th>'
+          + '<th class="th-acum">VOP Total</th>'
+          + '<th class="th-day">Longo Prazo</th>'
+          + '<th class="th-day">Prod. Desconto</th>'
+          + '<th class="th-day">Ant / Demais</th>'
+          + '<th class="th-day">ARV</th>'
+          + '<th class="th-deduz">Liquidação</th>'
+          + '<th class="th-net">Net Dia</th>'
+          + '<th class="th-net">Net Acumulado</th>'
+          + '<th class="th-ag">Ação</th>'
+          + '</tr></thead>'
+          + '<tbody>' + r.rowsHtml + '</tbody>'
+          + '</table></div></div>';
+        cont.innerHTML = html;
       } else {
-        let html = '';
         diasMes.forEach(d => {
           const r = _vgRenderQuadroDia(d, porAgData, netAcumByAg, agUser);
           html += '<div class="card">'
-            + '<div class="card-title"><span>📆 Dia ' + _vgFmtData(d) + '</span><span class="pill pill-green">' + diasMes.length + ' dia(s) no mês</span></div>'
+            + '<div class="card-title" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span>📆 Dia ' + _vgFmtData(d) + '</span><span class="pill pill-green">' + diasMes.length + ' dia(s) no mês</span>'
+            + '<button class="btn btn-primary btn-sm" onclick="vgSalvarProd()" style="margin-left:auto;font-size:11px;background:#0d7a5f;border-color:#0d7a5f" title="Atualiza os totais do Quadro Diário">💾 Salvar Prod</button>'
+            + '</div>'
             + '<div class="tbl-wrap"><table>'
             + '<thead><tr>'
             + '<th class="left th-ag">Agência</th>'
@@ -3364,6 +3512,7 @@
             + '<th class="th-deduz">Liquidação ' + _vgFmtData(d) + '</th>'
             + '<th class="th-net">Net Dia</th>'
             + '<th class="th-net">Net Acumulado</th>'
+            + '<th class="th-ag">Ação</th>'
             + '</tr></thead>'
             + '<tbody>' + r.rowsHtml + '</tbody>'
             + '</table></div></div>';
@@ -3418,7 +3567,7 @@
         if (podeEditar) {
           const v = Number(c.value) || 0;
           valHtml = '<input type="number" value="' + (v||'') + '" placeholder="0" '
-            + 'oninput="vgConsolidadoSalvarCampo(\'' + mes + '\', \'' + c.key + '\', this.value)" '
+            + 'onblur="vgConsolidadoSalvarCampo(\'' + mes + '\', \'' + c.key + '\', this.value)" '
             + 'style="width:100%;padding:4px 6px;border:2px solid #e67e22;background:#fff8e1;border-radius:4px;font-size:14px;font-weight:700;color:' + c.cor + ';text-align:right">';
         } else {
           valHtml = '<div style="font-size:15px;font-weight:700;color:' + c.cor + ';margin-top:3px">' + valTxt + '</div>';
@@ -3454,7 +3603,17 @@
       regDia.netDia  += netDia;
       regDia.netAcum += netAcum;
 
-      rowsHtml += '<tr>'
+      // Botão Editar / Concluir + Limpar
+      const emEdicao = _vgLinhasEmEdicao.has(_vgChaveLinha(ag, date));
+      const trBg = emEdicao ? 'background:#fff8e1;' : '';
+      // Tem dados? Mostra botão Limpar ao lado do Editar
+      const temDados = (Number(r.prodDesconto)||0) + (Number(r.antDemais)||0) + (Number(r.longoPrazo)||0) + (Number(r.arvDia)||0) + (Number(r.liquidacaoTotal)||0) !== 0;
+      const btnLimpar = temDados ? ' <button onclick="vgLimparLinhaDiaria(\'' + ag.replace(/'/g,"\\'") + '\', \'' + date + '\')" style="background:#fff;color:#a23026;border:1px solid #f0c0c0;border-radius:4px;padding:3px 6px;font-size:10px;cursor:pointer;white-space:nowrap" title="Limpar lançamento desta linha">🗑</button>' : '';
+      const btnAcao = emEdicao
+        ? '<button onclick="vgConcluirLinhaDiaria(\'' + ag.replace(/'/g,"\\'") + '\', \'' + date + '\')" style="background:#0d7a5f;color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap" title="Concluir edição desta linha">✔ OK</button>' + btnLimpar
+        : '<button onclick="vgEditarLinhaDiaria(\'' + ag.replace(/'/g,"\\'") + '\', \'' + date + '\')" style="background:#fff;color:#1a3a6e;border:1px solid #1a3a6e;border-radius:4px;padding:3px 8px;font-size:10px;font-weight:600;cursor:pointer;white-space:nowrap" title="Editar esta linha">✏️ Editar</button>' + btnLimpar;
+
+      rowsHtml += '<tr style="' + trBg + '">'
         + '<td class="ag left">' + ag + (ag === agUser ? ' <span style="color:#1a3a6e;font-size:9px;font-weight:700">(você)</span>' : '') + '</td>'
         + '<td class="auto-val ' + cls(vop) + '">' + fmtBRL(vop) + '</td>'
         + '<td>' + _vgInputDiarioCell(ag, date, 'longoPrazo',      r.longoPrazo,      agUser) + '</td>'
@@ -3464,6 +3623,7 @@
         + '<td>' + _vgInputDiarioCell(ag, date, 'liquidacaoTotal', r.liquidacaoTotal, agUser) + '</td>'
         + '<td class="net-dia ' + cls(netDia) + '">' + fmtBRL(netDia) + '</td>'
         + '<td class="net-acum ' + cls(netAcum) + '">' + fmtBRL(netAcum) + '</td>'
+        + '<td style="text-align:center">' + btnAcao + '</td>'
         + '</tr>';
     });
     rowsHtml += '<tr style="background:#fff8e1;font-weight:700;border-top:2px solid #1a3a6e">'
@@ -3476,12 +3636,18 @@
       + '<td class="saldo ' + cls(regDia.liq) + '">' + fmtBRL(regDia.liq) + '</td>'
       + '<td class="net-dia ' + cls(regDia.netDia) + '">' + fmtBRL(regDia.netDia) + '</td>'
       + '<td class="net-acum ' + cls(regDia.netAcum) + '">' + fmtBRL(regDia.netAcum) + '</td>'
+      + '<td></td>'
       + '</tr>';
     return { rowsHtml, regDia };
   }
 
   initSupabase();
-  setInterval(() => atualizarDashTotal((document.getElementById('ref-date')||{value:today}).value||today), 30000);
+  // Atualiza dashboard a cada 30s, mas pula se houver input focado (evita perder foco enquanto edita)
+  setInterval(() => {
+    const ativo = document.activeElement;
+    if (ativo && (ativo.tagName === 'INPUT' || ativo.tagName === 'TEXTAREA' || ativo.tagName === 'SELECT')) return;
+    atualizarDashTotal((document.getElementById('ref-date')||{value:today}).value||today);
+  }, 30000);
 
   const _prodDataEl = document.getElementById('prod-data');
   if (_prodDataEl) _prodDataEl.value = today;
