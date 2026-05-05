@@ -638,7 +638,8 @@
     <div class="card-title" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span>📅 Quadro Mensal — Acumulado do mês até a data</span>
       <span class="pill pill-blue" id="vg-mes-label">—</span>
-      <button id="vg-mensal-edit-btn" class="btn btn-secondary btn-sm" onclick="vgMensalToggleEdicaoGlobal()" style="margin-left:auto;font-size:11px">✏️ Modo edição</button>
+      <button id="vg-senha-btn" class="btn btn-secondary btn-sm" onclick="vgPedirSenhaQuadroMensal()" style="margin-left:auto;font-size:11px;color:#1a3a6e;border-color:#1a3a6e" title="Liberar edição com senha">🔒 Desbloquear edição</button>
+      <button id="vg-mensal-edit-btn" onclick="vgMensalToggleEdicaoGlobal()" style="display:none">_</button>
       <button class="btn btn-secondary btn-sm" onclick="vgLimparMesAbrir()" style="font-size:11px;color:#a23026;border-color:#a23026" title="Apaga TUDO do mês selecionado: lançamentos diários, saldos iniciais, overrides">🗑️ Limpar mês inteiro</button>
       <button class="btn btn-secondary btn-sm" onclick="vgLimparAgenciaAbrir()" style="font-size:11px;color:#a23026;border-color:#a23026" title="Apaga apenas os dados de uma agência específica no mês selecionado">🗑️ Limpar agência</button>
       <button class="btn btn-secondary btn-sm" onclick="vgLimparTudoAbrir()" style="font-size:11px;color:#fff;background:#a23026;border-color:#a23026" title="APAGA TUDO de TODAS as agências em TODOS os meses">🧹 Limpar TUDO</button>
@@ -2368,8 +2369,13 @@
   }
 
   function _vgInputMensalCell(agency, campo, valor, agUser, mes) {
-    // Liberado para qualquer usuário editar qualquer linha
+    // Edição protegida por senha — só renderiza input após desbloquear a sessão
     const v = Number(valor) || 0;
+    const unlocked = (sessionStorage.getItem('vg_quadro_mensal_unlocked') === '1');
+    if (!unlocked) {
+      // Modo leitura — mesmo visual que célula calculada
+      return '<span style="display:inline-block;padding:4px 6px;font-size:11px;text-align:right;width:100%">' + fmtBRL(v) + '</span>';
+    }
     return '<input type="number" class="vg-input" value="' + (v||'') + '" placeholder="0" '
       + 'oninput="vgSalvarCampoMensal(\'' + agency.replace(/'/g,"\\'") + '\', \'' + campo + '\', this.value, \'' + mes + '\')" '
       + 'style="width:100%;padding:4px 6px;border:1px solid #d0d5e0;border-radius:4px;font-size:11px;text-align:right">';
@@ -3122,7 +3128,59 @@
     return { rowsHtml, regDia };
   }
 
+  // ── Senha do Quadro Mensal — Tais2026 ────────────────────
+  // Desbloqueio dura 1 sessão (até fechar a aba)
+  const VG_SENHA_QUADRO_MENSAL = 'Tais2026';
+
+  function _vgQuadroMensalUnlocked() {
+    return sessionStorage.getItem('vg_quadro_mensal_unlocked') === '1';
+  }
+
+  function vgPedirSenhaQuadroMensal() {
+    if (_vgQuadroMensalUnlocked()) {
+      showToast('✅ Edição já está desbloqueada nesta sessão.');
+      return;
+    }
+    const s = prompt('🔒 Digite a senha para liberar a edição do Quadro Mensal:');
+    if (s === null) return;
+    if (s === VG_SENHA_QUADRO_MENSAL) {
+      sessionStorage.setItem('vg_quadro_mensal_unlocked', '1');
+      showToast('🔓 Edição liberada — vale até fechar a aba.');
+      renderVisaoGeral();
+    } else {
+      alert('❌ Senha incorreta. Edição segue bloqueada.');
+    }
+  }
+
+  function vgBloquearQuadroMensal() {
+    sessionStorage.removeItem('vg_quadro_mensal_unlocked');
+    showToast('🔒 Edição bloqueada novamente.');
+    renderVisaoGeral();
+  }
+
+  window.vgPedirSenhaQuadroMensal = vgPedirSenhaQuadroMensal;
+  window.vgBloquearQuadroMensal = vgBloquearQuadroMensal;
+
   function renderVisaoGeral() {
+    // Atualiza botão de senha conforme estado da sessão
+    (function() {
+      const btn = document.getElementById('vg-senha-btn');
+      if (!btn) return;
+      if (_vgQuadroMensalUnlocked()) {
+        btn.textContent = '🔓 Edição liberada (clique para bloquear)';
+        btn.style.color = '#0d7a5f';
+        btn.style.borderColor = '#0d7a5f';
+        btn.style.background = '#f0fbf7';
+        btn.setAttribute('onclick', 'vgBloquearQuadroMensal()');
+      } else {
+        btn.textContent = '🔒 Desbloquear edição';
+        btn.style.color = '#1a3a6e';
+        btn.style.borderColor = '#1a3a6e';
+        btn.style.background = '';
+        btn.setAttribute('onclick', 'vgPedirSenhaQuadroMensal()');
+      }
+    })();
+
     // Determina mês e (no modo dia) data de referência
     let mes, dataSel;
     if (_vgModo === 'todos') {
@@ -3196,8 +3254,8 @@
       reg.morno    += acum.mornoIni;
       reg.netProj  += acum.netProjMes;
 
-      // Modo edição GLOBAL — todas as linhas editáveis ao mesmo tempo
-      const editandoLinha = _vgMensalEditandoGlobal;
+      // EDIÇÃO PROTEGIDA POR SENHA — só edita após digitar a senha 1x na sessão
+      const editandoLinha = (sessionStorage.getItem('vg_quadro_mensal_unlocked') === '1');
       const tagOvr = (txt, ativo) => ativo ? ' <span style="font-size:8px;color:#a23026;font-weight:700" title="Override manual">📝</span>' : '';
 
       // Helper para renderizar célula de saldo (editável quando modo edição global está ativo)
