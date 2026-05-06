@@ -645,6 +645,7 @@
       <button id="vg-mensal-edit-btn" onclick="vgMensalToggleEdicaoGlobal()" style="display:none">_</button>
       <button class="btn btn-primary btn-sm" onclick="vgSalvarEAtualizar()" style="font-size:11px;background:#0d7a5f;border-color:#0d7a5f" title="Salva os lançamentos digitados e atualiza os totais (Net Fechamento, linha Regional)">💾 Salvar e atualizar totais</button>
       <span id="vg-pendente-aviso" style="display:none;align-items:center;gap:4px;font-size:11px;color:#a23026;font-weight:600;background:#fff5f5;padding:3px 8px;border-radius:4px;border:1px solid #f0c0c0">⚠️ Há alterações não atualizadas</span>
+      <button class="btn btn-secondary btn-sm" onclick="vgResetarOverridesAgencia()" style="font-size:11px;color:#1a3a6e;border-color:#1a3a6e" title="Apaga TODOS os valores manuais de uma agência (volta ao cálculo automático)">🔄 Resetar overrides</button>
       <button class="btn btn-secondary btn-sm" onclick="vgLimparMesAbrir()" style="font-size:11px;color:#a23026;border-color:#a23026" title="Apaga TUDO do mês selecionado: lançamentos diários, saldos iniciais, overrides">🗑️ Limpar mês inteiro</button>
       <button class="btn btn-secondary btn-sm" onclick="vgLimparAgenciaAbrir()" style="font-size:11px;color:#a23026;border-color:#a23026" title="Apaga apenas os dados de uma agência específica no mês selecionado">🗑️ Limpar agência</button>
       <button class="btn btn-secondary btn-sm" onclick="vgLimparTudoAbrir()" style="font-size:11px;color:#fff;background:#a23026;border-color:#a23026" title="APAGA TUDO de TODAS as agências em TODOS os meses">🧹 Limpar TUDO</button>
@@ -652,9 +653,10 @@
       <span id="vg-mensal-edit-status" style="font-size:11px;color:#a23026;font-weight:600;display:none">⚠️ Modo edição ATIVO — todas as agências editáveis</span>
     </div>
     <div class="formula-box">
-      <span class="tag soma">ACUMULA</span> Realizado VOP = Σ (Desc+Ant+LP) do mês &nbsp;|&nbsp; Liq Total = Σ Liq do mês &nbsp;|&nbsp; Net Atual = Σ Net Dia<br>
+      <span class="tag soma">ACUMULA</span> Realizado VOP = Σ (Desc+Ant+LP+ARV) do mês &nbsp;|&nbsp; Liq Total = Σ Liq do mês &nbsp;|&nbsp; Net Atual = Σ Net Dia<br>
       <span class="tag sub">DEDUZ</span> Saldos = Inicial − soma diária do mês &nbsp;|&nbsp;
-      <span class="tag igual">NET FECHAMENTO</span> = Sd.Desc + Sd.Quente + Sd.ARV + Sd.Liq + Net Atual
+      <span class="tag igual">NET FECHAMENTO</span> = Sd.Desc + Sd.Quente + Sd.ARV + Sd.Liq + Net Atual<br>
+      <span style="background:#fff8e1;padding:2px 6px;border-radius:3px;color:#666;font-size:10px">💡 Após desbloquear: digite valor + <strong>Enter</strong> ou <strong>TAB</strong> para salvar &nbsp;|&nbsp; <strong>0️⃣</strong> = força zero &nbsp;|&nbsp; <strong>🗑</strong> = volta ao cálculo automático</span>
     </div>
     <div class="tbl-wrap">
       <table id="vg-tabela-mensal">
@@ -2591,15 +2593,19 @@
     if (!all[mes]) all[mes] = {};
     if (!all[mes][agency]) all[mes][agency] = {};
     const v = (valor === '' || valor === null || valor === undefined) ? null : Number(valor);
+    let acao = '';
     if (v === null) {
       delete all[mes][agency][campo];
       if (!Object.keys(all[mes][agency]).length) delete all[mes][agency];
       if (!Object.keys(all[mes]).length) delete all[mes];
+      acao = 'apagado (volta ao cálculo)';
     } else {
       all[mes][agency][campo] = v;
+      acao = 'salvo: ' + fmtBRL(v);
     }
     localStorage.setItem(VG_AG_OVR_KEY, JSON.stringify(all));
-    // NÃO re-renderiza aqui — perde o foco. Use botão "💾 Salvar e atualizar" para refresh.
+    // Toast visível confirmando que SALVOU (resolve dúvida do usuário se foi gravado)
+    showToast('💾 ' + agency + ' / ' + campo + ' ' + acao);
     _vgMarcarPendente();
   }
 
@@ -2609,16 +2615,20 @@
     try { all = JSON.parse(localStorage.getItem(VG_AG_OVR_KEY) || '{}'); } catch(_) {}
     if (!all[mes]) all[mes] = {};
     if (!all[mes][agency]) all[mes][agency] = {};
+    let acao = '';
     if (valor === '' || valor === null || valor === undefined) {
       delete all[mes][agency]['liqTotal'];
       if (!Object.keys(all[mes][agency]).length) delete all[mes][agency];
       if (!Object.keys(all[mes]).length) delete all[mes];
+      acao = 'apagado (volta ao cálculo)';
     } else {
       // Sempre salva como negativo (multiplica por -1 se vier positivo)
       const num = Math.abs(Number(valor) || 0);
       all[mes][agency]['liqTotal'] = -num;
+      acao = 'salvo: ' + fmtBRL(-num);
     }
     localStorage.setItem(VG_AG_OVR_KEY, JSON.stringify(all));
+    showToast('💾 ' + agency + ' / Liq Total ' + acao);
     _vgMarcarPendente();
   }
   window.vgAgenciaSalvarCampoLiq = vgAgenciaSalvarCampoLiq;
@@ -3024,6 +3034,42 @@
   }
   window.vgDiagnosticarAgencia = vgDiagnosticarAgencia;
 
+  // 🔄 Apaga TODOS os overrides de UMA agência num mês
+  // Útil quando o usuário gravou valores errados via 0️⃣ e quer voltar ao cálculo automático
+  function vgResetarOverridesAgencia() {
+    const dataEl = document.getElementById('vg-data');
+    const mesTodosEl = document.getElementById('vg-mes-todos');
+    let mes;
+    if (typeof _vgModo !== 'undefined' && _vgModo === 'todos' && mesTodosEl && mesTodosEl.value) {
+      mes = mesTodosEl.value;
+    } else if (dataEl && dataEl.value) {
+      mes = dataEl.value.slice(0,7);
+    } else {
+      mes = (typeof today !== 'undefined' ? today : new Date().toISOString().slice(0,10)).slice(0,7);
+    }
+    const ag = prompt('🔄 Resetar overrides do Quadro Mensal\n\nDigite o nome da agência cujos OVERRIDES (valores manuais) você quer apagar:\n\nExemplo: Lapa, Alphaville, Osasco\n\nMês selecionado: ' + mes + '\n\n(Os lançamentos diários NÃO são apagados, só os valores manuais que sobrescrevem o cálculo)');
+    if (!ag) return;
+    const agClean = ag.trim();
+    if (!VG_AGENCIAS.includes(agClean)) {
+      alert('❌ Agência "' + agClean + '" não encontrada. Use exatamente um destes nomes:\n\n' + VG_AGENCIAS.join(', '));
+      return;
+    }
+    let all = {};
+    try { all = JSON.parse(localStorage.getItem(VG_AG_OVR_KEY) || '{}'); } catch(_) {}
+    if (!all[mes] || !all[mes][agClean]) {
+      alert('ℹ️ Não há overrides para ' + agClean + ' em ' + mes + '. Os valores já estão sendo calculados automaticamente.');
+      return;
+    }
+    const nOvr = Object.keys(all[mes][agClean]).length;
+    if (!confirm('Apagar ' + nOvr + ' override(s) manual(is) de ' + agClean + ' em ' + mes + '?\n\nOs valores voltarão a ser calculados automaticamente.')) return;
+    delete all[mes][agClean];
+    if (!Object.keys(all[mes]).length) delete all[mes];
+    localStorage.setItem(VG_AG_OVR_KEY, JSON.stringify(all));
+    showToast('✅ ' + nOvr + ' override(s) de ' + agClean + ' apagado(s).');
+    if (typeof renderVisaoGeral === 'function') renderVisaoGeral();
+  }
+  window.vgResetarOverridesAgencia = vgResetarOverridesAgencia;
+
   // 🧹 Limpa TUDO de TODAS as agências em TODOS os meses
   // Tripla confirmação + backup + upload imediato.
   async function vgLimparTudoAbrir() {
@@ -3377,25 +3423,31 @@
         saldoDesc:0, saldoQuente:0, saldoArv:0, saldoLiq:0, netAtual:0, netFechamento:0
       };
 
-      // Aplica overrides por agência+mês para Liq Total, Saldo Desc, Saldo Quente, Saldo ARV
+      // Aplica overrides por agência+mês para Liq Total, Saldo Desc, Saldo Quente, Saldo ARV, Realizado VOP, Net Atual, Net Fechamento
       const ovrAg = vgAgenciaCarregarOverride(ag, mes);
       const ovrLiq    = (ovrAg.liqTotal    !== undefined && ovrAg.liqTotal    !== null) ? Number(ovrAg.liqTotal)    : null;
       const ovrSdDesc = (ovrAg.saldoDesc   !== undefined && ovrAg.saldoDesc   !== null) ? Number(ovrAg.saldoDesc)   : null;
       const ovrSdQuen = (ovrAg.saldoQuente !== undefined && ovrAg.saldoQuente !== null) ? Number(ovrAg.saldoQuente) : null;
       const ovrSdArv  = (ovrAg.saldoArv    !== undefined && ovrAg.saldoArv    !== null) ? Number(ovrAg.saldoArv)    : null;
+      const ovrRealVop = (ovrAg.realVop    !== undefined && ovrAg.realVop    !== null) ? Number(ovrAg.realVop)    : null;
+      const ovrNetAtual = (ovrAg.netAtual  !== undefined && ovrAg.netAtual  !== null) ? Number(ovrAg.netAtual)  : null;
+      const ovrNetFech = (ovrAg.netFechamento !== undefined && ovrAg.netFechamento !== null) ? Number(ovrAg.netFechamento) : null;
       const valLiq    = (ovrLiq    !== null) ? ovrLiq    : acum.somaLiq;
       const valSdDesc = (ovrSdDesc !== null) ? ovrSdDesc : acum.saldoDesc;
       const valSdQuen = (ovrSdQuen !== null) ? ovrSdQuen : acum.saldoQuente;
       const valSdArv  = (ovrSdArv  !== null) ? ovrSdArv  : acum.saldoArv;
-      // Net Fechamento usa os valores efetivos (com overrides aplicados)
-      const valNetFech = valSdDesc + valSdQuen + valSdArv + valLiq + acum.netAtual;
+      const valRealVop = (ovrRealVop !== null) ? ovrRealVop : acum.somaVop;
+      const valNetAtual = (ovrNetAtual !== null) ? ovrNetAtual : acum.netAtual;
+      // Net Fechamento usa os valores efetivos (com overrides aplicados) ou pode ser sobrescrito direto
+      const valNetFechCalc = valSdDesc + valSdQuen + valSdArv + valLiq + valNetAtual;
+      const valNetFech = (ovrNetFech !== null) ? ovrNetFech : valNetFechCalc;
 
       reg.metaVop  += acum.metaVop;
-      reg.realVop  += acum.somaVop;
+      reg.realVop  += valRealVop;
       reg.liqTotal += valLiq;
       reg.sdDesc   += valSdDesc;
       reg.sdQuente += valSdQuen;
-      reg.netAtual += acum.netAtual;
+      reg.netAtual += valNetAtual;
       reg.sdArv    += valSdArv;
       reg.netFech  += valNetFech;
       reg.morno    += acum.mornoIni;
@@ -3419,9 +3471,27 @@
           const placeholder = ehLiq ? '0 (negativo)' : '0';
           const corBorda = ehLiq ? '#b92d2d' : '#e67e22';
           const corBg    = ehLiq ? '#fff5f5' : '#fff8e1';
-          return '<td><input type="number" value="' + (valorMostrar||'') + '" placeholder="' + placeholder + '" '
+          // Handler que força zero (override = 0)
+          const forceZero = 'vgAgenciaSalvarCampo(\'' + ag.replace(/'/g,"\\'") + '\', \'' + mes + '\', \'' + campoOverride + '\', \'0\'); if(typeof renderVisaoGeral===\'function\') renderVisaoGeral();';
+          // Handler que apaga override (volta ao cálculo automático)
+          const apagarOvr = 'vgAgenciaSalvarCampo(\'' + ag.replace(/'/g,"\\'") + '\', \'' + mes + '\', \'' + campoOverride + '\', \'\'); if(typeof renderVisaoGeral===\'function\') renderVisaoGeral();';
+          // Botões: 🗑 só aparece quando tem override ativo (pra voltar ao cálculo)
+          const btnLimparOvr = hasOvr ? '<button onclick="' + apagarOvr + '" style="background:none;border:none;color:#a23026;font-size:11px;cursor:pointer;padding:0 2px" title="Apagar override e voltar ao cálculo automático">🗑</button>' : '';
+          const btnZero = '<button onclick="' + forceZero + '" style="background:none;border:none;color:#666;font-size:11px;cursor:pointer;padding:0 2px" title="Forçar valor zero (override permanente)">0️⃣</button>';
+          // BUGFIX: mostra o valor mesmo quando é 0 (antes ficava vazio por causa de "valorMostrar||''")
+          // E adiciona onfocus="this.select()" para auto-selecionar o conteúdo ao clicar
+          const valorInput = (valorMostrar === '' || valorMostrar === null || valorMostrar === undefined) ? '' : String(valorMostrar);
+          return '<td style="position:relative">'
+            + '<div style="display:flex;align-items:center;gap:2px">'
+            + '<input type="number" value="' + valorInput + '" placeholder="' + placeholder + '" '
+            + 'onfocus="this.select()" '
             + 'onblur="' + handler + '" '
-            + 'style="width:100%;padding:4px 6px;border:2px solid ' + corBorda + ';background:' + corBg + ';border-radius:4px;font-size:11px;font-weight:700;text-align:right"></td>';
+            + 'onkeydown="if(event.key===\'Enter\'){this.blur();}" '
+            + 'title="Valor atual: ' + valorMostrar + ' — clique para selecionar e digite o novo" '
+            + 'style="flex:1;min-width:50px;padding:4px 6px;border:2px solid ' + corBorda + ';background:' + corBg + ';border-radius:4px;font-size:11px;font-weight:700;text-align:right">'
+            + btnZero + btnLimparOvr
+            + '</div>'
+            + '</td>';
         }
         return '<td class="' + classe + ' ' + cls(valor) + '">' + fmtBRL(valor) + tagOvr('', hasOvr) + '</td>';
       };
@@ -3430,15 +3500,15 @@
       htmlM += '<tr>'
         + '<td class="ag left">' + ag + (ag === agUser ? ' <span style="color:#1a3a6e;font-size:9px;font-weight:700">(você)</span>' : '') + '</td>'
         + '<td>' + _vgInputMensalCell(ag, 'metaVopInicial', acum.metaVop, agUser, mes) + '</td>'
-        + '<td class="auto-val ' + cls(acum.somaVop) + '">' + fmtBRL(acum.somaVop) + '</td>'
+        + _cellSaldo('realVop',     valRealVop, 'auto-val', ovrRealVop !== null)
         + _cellSaldo('liqTotal',    valLiq,    'saldo', ovrLiq    !== null)
         + _cellSaldo('saldoDesc',   valSdDesc, 'saldo', ovrSdDesc !== null)
         + _cellSaldo('saldoQuente', valSdQuen, 'saldo', ovrSdQuen !== null)
         + _cellSaldo('saldoArv',    valSdArv,  'saldo', ovrSdArv  !== null)
-        + '<td class="net-acum ' + cls(acum.netAtual) + '">' + fmtBRL(acum.netAtual) + '</td>'
+        + _cellSaldo('netAtual',    valNetAtual, 'net-acum', ovrNetAtual !== null)
         + '<td>' + _vgInputMensalCell(ag, 'netProjMes', acum.netProjMes, agUser, mes) + '</td>'
         + '<td>' + _vgInputMensalCell(ag, 'mornoInicial', acum.mornoIni, agUser, mes) + '</td>'
-        + '<td class="net-acum ' + cls(valNetFech) + '">' + fmtBRL(valNetFech) + '</td>'
+        + _cellSaldo('netFechamento', valNetFech, 'net-acum', ovrNetFech !== null)
         + '</tr>';
     });
     // Linha Regional (continua só leitura — totais somados na mesma ordem)
