@@ -645,6 +645,7 @@
       <button id="vg-mensal-edit-btn" onclick="vgMensalToggleEdicaoGlobal()" style="display:none">_</button>
       <button class="btn btn-primary btn-sm" onclick="vgSalvarEAtualizar()" style="font-size:11px;background:#0d7a5f;border-color:#0d7a5f" title="Salva os lançamentos digitados e atualiza os totais (Net Fechamento, linha Regional)">💾 Salvar e atualizar totais</button>
       <span id="vg-pendente-aviso" style="display:none;align-items:center;gap:4px;font-size:11px;color:#a23026;font-weight:600;background:#fff5f5;padding:3px 8px;border-radius:4px;border:1px solid #f0c0c0">⚠️ Há alterações não atualizadas</span>
+      <button class="btn btn-primary btn-sm" onclick="vgAbrirSaldosIniciais()" style="font-size:11px;background:#0d6e56;border-color:#0d6e56" title="Informa/edita os saldos iniciais (Desc, Quente, ARV) que servem de base para a dedução automática">📋 Saldos Iniciais</button>
       <button class="btn btn-secondary btn-sm" onclick="vgResetarOverridesAgencia()" style="font-size:11px;color:#1a3a6e;border-color:#1a3a6e" title="Apaga TODOS os valores manuais de uma agência (volta ao cálculo automático)">🔄 Resetar overrides</button>
       <button class="btn btn-secondary btn-sm" onclick="vgLimparMesAbrir()" style="font-size:11px;color:#a23026;border-color:#a23026" title="Apaga TUDO do mês selecionado: lançamentos diários, saldos iniciais, overrides">🗑️ Limpar mês inteiro</button>
       <button class="btn btn-secondary btn-sm" onclick="vgLimparAgenciaAbrir()" style="font-size:11px;color:#a23026;border-color:#a23026" title="Apaga apenas os dados de uma agência específica no mês selecionado">🗑️ Limpar agência</button>
@@ -664,12 +665,12 @@
           <tr>
             <th class="left th-ag">Agência</th>
             <th class="th-meta">Meta VOP</th>
-            <th class="th-acum">Realizado VOP</th>
-            <th class="th-deduz">Liquidação Total</th>
-            <th class="th-deduz">Descontos</th>
-            <th class="th-deduz">Quente</th>
-            <th class="th-deduz">ARV Projetado</th>
-            <th class="th-day">Net Ativos Atual</th>
+            <th class="th-acum">Realizado VOP<br><small style="font-size:9px;font-weight:400;opacity:0.85">Σ Desc+Ant+LP+ARV</small></th>
+            <th class="th-deduz">Liquidação Total<br><small style="font-size:9px;font-weight:400;opacity:0.85">Liq.Ini + Σ Liq</small></th>
+            <th class="th-deduz">Descontos<br><small style="font-size:9px;font-weight:400;opacity:0.85">Desc.Ini − Σ Prod.Desc</small></th>
+            <th class="th-deduz">Quente<br><small style="font-size:9px;font-weight:400;opacity:0.85">Quente.Ini − Σ Longo Prazo</small></th>
+            <th class="th-deduz">ARV Projetado<br><small style="font-size:9px;font-weight:400;opacity:0.85">ARV.Ini − Σ ARV diário</small></th>
+            <th class="th-day">Net Ativos Atual<br><small style="font-size:9px;font-weight:400;opacity:0.85">Σ Net Dia</small></th>
             <th class="th-net">Projeção Net</th>
             <th class="th-day">Morno</th>
             <th class="th-net">Net Fechamento Total</th>
@@ -3070,6 +3071,128 @@
   }
   window.vgResetarOverridesAgencia = vgResetarOverridesAgencia;
 
+  // ── Modal de Saldos Iniciais (Desc.Inicial, Quente, ARV) ──
+  // Permite informar/conferir os valores INICIAIS que servem de base para a dedução automática
+  // Saldo Desc = Desc.Inicial − Σ Prod.Desconto
+  // Saldo Quente = Quente − Σ Longo Prazo
+  // Saldo ARV = ARV.Inicial − Σ ARV diário
+  function vgAbrirSaldosIniciais() {
+    const dataEl = document.getElementById('vg-data');
+    const mesTodosEl = document.getElementById('vg-mes-todos');
+    let mes;
+    if (typeof _vgModo !== 'undefined' && _vgModo === 'todos' && mesTodosEl && mesTodosEl.value) {
+      mes = mesTodosEl.value;
+    } else if (dataEl && dataEl.value) {
+      mes = dataEl.value.slice(0,7);
+    } else {
+      mes = (typeof today !== 'undefined' ? today : new Date().toISOString().slice(0,10)).slice(0,7);
+    }
+
+    // Cria modal
+    const old = document.getElementById('vg-saldos-iniciais-modal');
+    if (old) document.body.removeChild(old);
+
+    const overlay = document.createElement('div');
+    overlay.id = 'vg-saldos-iniciais-modal';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.55);display:flex;align-items:flex-start;justify-content:center;z-index:99999;overflow-y:auto;padding:24px';
+
+    let html = '<div style="background:#fff;border-radius:8px;padding:22px;max-width:1100px;width:100%;font-family:inherit;box-shadow:0 8px 32px rgba(0,0,0,0.25);margin:auto">';
+    html += '<h3 style="margin:0 0 8px;color:#1a3a6e;font-size:16px">📋 Saldos Iniciais — ' + mes + '</h3>';
+    html += '<p style="margin:0 0 14px;font-size:12px;color:#555;line-height:1.5">';
+    html += 'Informe o saldo INICIAL de cada produto para cada agência. A cada lançamento diário, o saldo é DEDUZIDO automaticamente.<br>';
+    html += '<strong>Saldo Desc</strong> = Desc.Inicial − Σ Prod.Desconto &nbsp;|&nbsp;';
+    html += '<strong>Saldo Quente</strong> = Quente Inicial − Σ Longo Prazo &nbsp;|&nbsp;';
+    html += '<strong>Saldo ARV</strong> = ARV Inicial − Σ ARV diário';
+    html += '</p>';
+    html += '<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:#1a3a6e;color:#fff">';
+    html += '<th style="padding:6px;text-align:left">Agência</th>';
+    html += '<th style="padding:6px;text-align:right">Desc. Inicial</th>';
+    html += '<th style="padding:6px;text-align:right;background:#0d6e56">Σ Prod.Desconto<br><small style="font-weight:400;opacity:0.85">(deduzido)</small></th>';
+    html += '<th style="padding:6px;text-align:right">Saldo Desc atual</th>';
+    html += '<th style="padding:6px;text-align:right">Quente Inicial</th>';
+    html += '<th style="padding:6px;text-align:right;background:#0d6e56">Σ Longo Prazo<br><small style="font-weight:400;opacity:0.85">(deduzido)</small></th>';
+    html += '<th style="padding:6px;text-align:right">Saldo Quente atual</th>';
+    html += '<th style="padding:6px;text-align:right">ARV Inicial</th>';
+    html += '<th style="padding:6px;text-align:right;background:#0d6e56">Σ ARV diário<br><small style="font-weight:400;opacity:0.85">(deduzido)</small></th>';
+    html += '<th style="padding:6px;text-align:right">Saldo ARV atual</th>';
+    html += '<th style="padding:6px;text-align:right">Liq. Inicial</th>';
+    html += '<th style="padding:6px;text-align:right;background:#0d6e56">Σ Liq diária<br><small style="font-weight:400;opacity:0.85">(deduzido, negativo)</small></th>';
+    html += '<th style="padding:6px;text-align:right">Saldo Liq atual</th>';
+    html += '</tr></thead><tbody>';
+
+    VG_AGENCIAS.forEach(ag => {
+      const acum = calcAcumuladoMes(ag, mes) || {};
+      const descIni = Number(acum.descInicial) || 0;
+      const quenteIni = Number(acum.quenteIni) || 0;
+      const arvIni = Number(acum.arvInicial) || 0;
+      const liqIni = Number(acum.liqInicial) || 0;
+      const sDesc = Number(acum.somaDesc) || 0;
+      const sLp = Number(acum.somaLp) || 0;
+      const sArv = Number(acum.somaArv) || 0;
+      const sLiq = Number(acum.somaLiq) || 0;
+      const saldoDesc = descIni - sDesc;
+      const saldoQuente = quenteIni - sLp;
+      const saldoArv = arvIni - sArv;
+      const saldoLiq = liqIni + sLiq; // sLiq é negativo
+      const corSaldo = (v) => v < 0 ? 'color:#a23026;font-weight:700' : 'color:#0d7a5f;font-weight:700';
+
+      html += '<tr style="border-bottom:1px solid #e0e4ec">';
+      html += '<td style="padding:5px 6px;font-weight:600;color:#1a3a6e">' + ag + '</td>';
+      // Desc.Inicial — editável
+      html += '<td style="padding:3px"><input type="number" data-agency="' + ag + '" data-campo="descInicial" data-mes="' + mes + '" value="' + (descIni||'') + '" onblur="vgSalvarSaldoInicial(this)" style="width:100%;padding:4px 6px;border:1px solid #d0d5e0;border-radius:4px;font-size:11px;text-align:right"></td>';
+      html += '<td style="padding:5px 6px;text-align:right;color:#666">' + fmtBRL(sDesc) + '</td>';
+      html += '<td style="padding:5px 6px;text-align:right;' + corSaldo(saldoDesc) + '">' + fmtBRL(saldoDesc) + '</td>';
+      // Quente Inicial — editável
+      html += '<td style="padding:3px"><input type="number" data-agency="' + ag + '" data-campo="quenteInicial" data-mes="' + mes + '" value="' + (quenteIni||'') + '" onblur="vgSalvarSaldoInicial(this)" style="width:100%;padding:4px 6px;border:1px solid #d0d5e0;border-radius:4px;font-size:11px;text-align:right"></td>';
+      html += '<td style="padding:5px 6px;text-align:right;color:#666">' + fmtBRL(sLp) + '</td>';
+      html += '<td style="padding:5px 6px;text-align:right;' + corSaldo(saldoQuente) + '">' + fmtBRL(saldoQuente) + '</td>';
+      // ARV Inicial — editável
+      html += '<td style="padding:3px"><input type="number" data-agency="' + ag + '" data-campo="arvInicial" data-mes="' + mes + '" value="' + (arvIni||'') + '" onblur="vgSalvarSaldoInicial(this)" style="width:100%;padding:4px 6px;border:1px solid #d0d5e0;border-radius:4px;font-size:11px;text-align:right"></td>';
+      html += '<td style="padding:5px 6px;text-align:right;color:#666">' + fmtBRL(sArv) + '</td>';
+      html += '<td style="padding:5px 6px;text-align:right;' + corSaldo(saldoArv) + '">' + fmtBRL(saldoArv) + '</td>';
+      // Liq.Inicial — editável
+      html += '<td style="padding:3px"><input type="number" data-agency="' + ag + '" data-campo="liqInicial" data-mes="' + mes + '" value="' + (liqIni||'') + '" onblur="vgSalvarSaldoInicial(this)" style="width:100%;padding:4px 6px;border:1px solid #d0d5e0;border-radius:4px;font-size:11px;text-align:right"></td>';
+      html += '<td style="padding:5px 6px;text-align:right;color:#a23026">' + fmtBRL(sLiq) + '</td>';
+      html += '<td style="padding:5px 6px;text-align:right;' + corSaldo(saldoLiq) + '">' + fmtBRL(saldoLiq) + '</td>';
+      html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    html += '<div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">';
+    html += '<button onclick="vgFecharSaldosIniciais()" class="btn btn-secondary btn-sm" style="padding:7px 14px">Fechar</button>';
+    html += '<button onclick="vgFecharSaldosIniciais();renderVisaoGeral()" class="btn btn-primary btn-sm" style="padding:7px 14px;background:#0d7a5f;border-color:#0d7a5f">💾 Salvar e Atualizar Tabela</button>';
+    html += '</div>';
+    html += '<p style="margin:14px 0 0;font-size:11px;color:#888;text-align:center">💡 Após salvar, os Saldos atuais aparecem com a dedução automática aplicada na tabela do Quadro Mensal.</p>';
+    html += '</div>';
+
+    overlay.innerHTML = html;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) vgFecharSaldosIniciais(); });
+  }
+
+  function vgFecharSaldosIniciais() {
+    const m = document.getElementById('vg-saldos-iniciais-modal');
+    if (m) document.body.removeChild(m);
+  }
+
+  function vgSalvarSaldoInicial(input) {
+    const agency = input.getAttribute('data-agency');
+    const campo = input.getAttribute('data-campo');
+    const mes = input.getAttribute('data-mes');
+    const valor = (input.value === '' || input.value === null) ? 0 : Number(input.value) || 0;
+    const exist = carregarSaldosMensais(agency, mes) || {};
+    const novo = Object.assign({}, exist);
+    novo[campo] = valor;
+    salvarSaldosMensais(agency, novo, mes);
+    showToast('💾 ' + agency + ' / ' + campo + ' salvo: ' + fmtBRL(valor));
+    // Re-renderiza o modal pra mostrar o novo saldo calculado
+    setTimeout(() => vgAbrirSaldosIniciais(), 100);
+  }
+
+  window.vgAbrirSaldosIniciais = vgAbrirSaldosIniciais;
+  window.vgFecharSaldosIniciais = vgFecharSaldosIniciais;
+  window.vgSalvarSaldoInicial = vgSalvarSaldoInicial;
+
   // 🧹 Limpa TUDO de TODAS as agências em TODOS os meses
   // Tripla confirmação + backup + upload imediato.
   async function vgLimparTudoAbrir() {
@@ -3432,7 +3555,7 @@
       const ovrRealVop = (ovrAg.realVop    !== undefined && ovrAg.realVop    !== null) ? Number(ovrAg.realVop)    : null;
       const ovrNetAtual = (ovrAg.netAtual  !== undefined && ovrAg.netAtual  !== null) ? Number(ovrAg.netAtual)  : null;
       const ovrNetFech = (ovrAg.netFechamento !== undefined && ovrAg.netFechamento !== null) ? Number(ovrAg.netFechamento) : null;
-      const valLiq    = (ovrLiq    !== null) ? ovrLiq    : acum.somaLiq;
+      const valLiq    = (ovrLiq    !== null) ? ovrLiq    : acum.saldoLiq;
       const valSdDesc = (ovrSdDesc !== null) ? ovrSdDesc : acum.saldoDesc;
       const valSdQuen = (ovrSdQuen !== null) ? ovrSdQuen : acum.saldoQuente;
       const valSdArv  = (ovrSdArv  !== null) ? ovrSdArv  : acum.saldoArv;
