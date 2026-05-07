@@ -646,7 +646,9 @@
       <button class="btn btn-primary btn-sm" onclick="vgSalvarEAtualizar()" style="font-size:11px;background:#0d7a5f;border-color:#0d7a5f" title="Salva os lançamentos digitados e atualiza os totais (Net Fechamento, linha Regional)">💾 Salvar e atualizar totais</button>
       <span id="vg-pendente-aviso" style="display:none;align-items:center;gap:4px;font-size:11px;color:#a23026;font-weight:600;background:#fff5f5;padding:3px 8px;border-radius:4px;border:1px solid #f0c0c0">⚠️ Há alterações não atualizadas</span>
       <button class="btn btn-primary btn-sm" onclick="vgAbrirSaldosIniciais()" style="font-size:11px;background:#0d6e56;border-color:#0d6e56" title="Informa/edita os saldos iniciais (Desc, Quente, ARV) que servem de base para a dedução automática">📋 Saldos Iniciais</button>
-      <button class="btn btn-secondary btn-sm" onclick="vgResetarOverridesAgencia()" style="font-size:11px;color:#1a3a6e;border-color:#1a3a6e" title="Apaga TODOS os valores manuais de uma agência (volta ao cálculo automático)">🔄 Resetar overrides</button>
+      <button class="btn btn-secondary btn-sm" onclick="vgDiagnosticarLiq()" style="font-size:11px;color:#e67e22;border-color:#e67e22" title="Diagnóstico: ver por que a Liquidação Total não está deduzindo do esperado">🔍 Diagnóstico Liq</button>
+      <button class="btn btn-secondary btn-sm" onclick="vgResetarOverridesAgencia()" style="font-size:11px;color:#1a3a6e;border-color:#1a3a6e" title="Apaga TODOS os valores manuais de uma agência (volta ao cálculo automático)">🔄 Resetar overrides (1 agência)</button>
+      <button class="btn btn-secondary btn-sm" onclick="vgApagarTodosOverridesMes()" style="font-size:11px;color:#fff;background:#a23026;border-color:#a23026" title="EMERGÊNCIA: apaga TODOS os valores manuais do mês inteiro (todas as 12 agências) - usa quando dedução automática não está funcionando">☢️ Apagar overrides do mês inteiro</button>
       <button class="btn btn-secondary btn-sm" onclick="vgLimparMesAbrir()" style="font-size:11px;color:#a23026;border-color:#a23026" title="Apaga TUDO do mês selecionado: lançamentos diários, saldos iniciais, overrides">🗑️ Limpar mês inteiro</button>
       <button class="btn btn-secondary btn-sm" onclick="vgLimparAgenciaAbrir()" style="font-size:11px;color:#a23026;border-color:#a23026" title="Apaga apenas os dados de uma agência específica no mês selecionado">🗑️ Limpar agência</button>
       <button class="btn btn-secondary btn-sm" onclick="vgLimparTudoAbrir()" style="font-size:11px;color:#fff;background:#a23026;border-color:#a23026" title="APAGA TUDO de TODAS as agências em TODOS os meses">🧹 Limpar TUDO</button>
@@ -657,7 +659,8 @@
       <span class="tag soma">ACUMULA</span> Realizado VOP = Σ (Desc+Ant+LP+ARV) do mês &nbsp;|&nbsp; Liq Total = Σ Liq do mês &nbsp;|&nbsp; Net Atual = Σ Net Dia<br>
       <span class="tag sub">DEDUZ</span> Saldos = Inicial − soma diária do mês &nbsp;|&nbsp;
       <span class="tag igual">NET FECHAMENTO</span> = Sd.Desc + Sd.Quente + Sd.ARV + Sd.Liq + Net Atual<br>
-      <span style="background:#fff8e1;padding:2px 6px;border-radius:3px;color:#666;font-size:10px">💡 Após desbloquear: digite valor + <strong>Enter</strong> ou <strong>TAB</strong> para salvar &nbsp;|&nbsp; <strong>0️⃣</strong> = força zero &nbsp;|&nbsp; <strong>🗑</strong> = volta ao cálculo automático</span>
+      <span style="background:#fff8e1;padding:2px 6px;border-radius:3px;color:#666;font-size:10px">💡 Após desbloquear: digite valor + <strong>Enter</strong> ou <strong>TAB</strong> para salvar &nbsp;|&nbsp; <strong>0️⃣</strong> = força zero &nbsp;|&nbsp; <strong>🗑</strong> = volta ao cálculo automático</span><br>
+      <span style="background:#fde8e8;padding:2px 6px;border-radius:3px;color:#a23026;font-size:10px;margin-top:4px;display:inline-block">⚠️ <strong>Não está deduzindo da Prod.Diária?</strong> Provável causa: você editou manualmente alguma coluna e isso travou o cálculo. Use <strong>🔄 Resetar overrides</strong> ou <strong>☢️ Apagar overrides do mês</strong> para destravar.</span>
     </div>
     <div class="tbl-wrap">
       <table id="vg-tabela-mensal">
@@ -666,14 +669,14 @@
             <th class="left th-ag">Agência</th>
             <th class="th-meta">Meta VOP</th>
             <th class="th-acum">Realizado VOP<br><small style="font-size:9px;font-weight:400;opacity:0.85">Σ Desc+Ant+LP+ARV</small></th>
-            <th class="th-deduz">Liquidação Total<br><small style="font-size:9px;font-weight:400;opacity:0.85">Liq.Ini + Σ Liq</small></th>
+            <th class="th-deduz">Liquidação Total<br><small style="font-size:9px;font-weight:400;opacity:0.85">Liq.Ini − Σ Liq diária (paga d\u00edvida)</small></th>
             <th class="th-deduz">Descontos<br><small style="font-size:9px;font-weight:400;opacity:0.85">Desc.Ini − Σ Prod.Desc</small></th>
             <th class="th-deduz">Quente<br><small style="font-size:9px;font-weight:400;opacity:0.85">Quente.Ini − Σ Longo Prazo</small></th>
             <th class="th-deduz">ARV Projetado<br><small style="font-size:9px;font-weight:400;opacity:0.85">ARV.Ini − Σ ARV diário</small></th>
             <th class="th-day">Net Ativos Atual<br><small style="font-size:9px;font-weight:400;opacity:0.85">Σ Net Dia</small></th>
             <th class="th-net">Projeção Net</th>
             <th class="th-day">Morno</th>
-            <th class="th-net">Net Fechamento Total</th>
+            <th class="th-net">Net Fechamento Total<br><small style="font-size:9px;font-weight:400;opacity:0.85">Sd.Desc + Sd.Quente + Sd.ARV + Sd.Liq + Net Atual</small></th>
           </tr>
         </thead>
         <tbody id="vg-tbody-mensal"></tbody>
@@ -3071,6 +3074,38 @@
   }
   window.vgResetarOverridesAgencia = vgResetarOverridesAgencia;
 
+  // ☢️ APAGAR TODOS OS OVERRIDES do mês inteiro (todas as 12 agências)
+  // Útil quando dedução não está acontecendo porque overrides antigos estão travando
+  function vgApagarTodosOverridesMes() {
+    const dataEl = document.getElementById('vg-data');
+    const mesTodosEl = document.getElementById('vg-mes-todos');
+    let mes;
+    if (typeof _vgModo !== 'undefined' && _vgModo === 'todos' && mesTodosEl && mesTodosEl.value) {
+      mes = mesTodosEl.value;
+    } else if (dataEl && dataEl.value) {
+      mes = dataEl.value.slice(0,7);
+    } else {
+      mes = (typeof today !== 'undefined' ? today : new Date().toISOString().slice(0,10)).slice(0,7);
+    }
+    let all = {};
+    try { all = JSON.parse(localStorage.getItem(VG_AG_OVR_KEY) || '{}'); } catch(_) {}
+    if (!all[mes] || !Object.keys(all[mes]).length) {
+      alert('ℹ️ Não há nenhum override no mês ' + mes + '. Os valores já estão sendo calculados automaticamente.\n\nSe a dedução não está aparecendo, o problema pode ser:\n• Saldos Iniciais não preenchidos (clique em "📋 Saldos Iniciais")\n• Lançamentos diários não estão salvos (verifique no Quadro Diário)');
+      return;
+    }
+    let totalOvrs = 0;
+    Object.keys(all[mes]).forEach(ag => {
+      totalOvrs += Object.keys(all[mes][ag]).length;
+    });
+    const nAgs = Object.keys(all[mes]).length;
+    if (!confirm('☢️ APAGAR TODOS OS OVERRIDES do mês ' + mes + '?\n\n' + totalOvrs + ' valor(es) manual(is) em ' + nAgs + ' agência(s) serão apagados.\n\nTodas as colunas (Liq Total, Saldo Desc, Quente, ARV, Realizado VOP, Net Atual, Net Fechamento) voltarão a ser CALCULADAS automaticamente a partir dos lançamentos diários e saldos iniciais.\n\nLançamentos diários e saldos iniciais NÃO são apagados.')) return;
+    delete all[mes];
+    localStorage.setItem(VG_AG_OVR_KEY, JSON.stringify(all));
+    showToast('☢️ ' + totalOvrs + ' override(s) de ' + nAgs + ' ag(s) apagado(s). Cálculo automático ativo.');
+    if (typeof renderVisaoGeral === 'function') renderVisaoGeral();
+  }
+  window.vgApagarTodosOverridesMes = vgApagarTodosOverridesMes;
+
   // ── Modal de Saldos Iniciais (Desc.Inicial, Quente, ARV) ──
   // Permite informar/conferir os valores INICIAIS que servem de base para a dedução automática
   // Saldo Desc = Desc.Inicial − Σ Prod.Desconto
@@ -3133,7 +3168,7 @@
       const saldoDesc = descIni - sDesc;
       const saldoQuente = quenteIni - sLp;
       const saldoArv = arvIni - sArv;
-      const saldoLiq = liqIni + sLiq; // sLiq é negativo
+      const saldoLiq = liqIni - sLiq; // sLiq é negativo → DIMINUI a dívida
       const corSaldo = (v) => v < 0 ? 'color:#a23026;font-weight:700' : 'color:#0d7a5f;font-weight:700';
 
       html += '<tr style="border-bottom:1px solid #e0e4ec">';
@@ -3192,6 +3227,105 @@
   window.vgAbrirSaldosIniciais = vgAbrirSaldosIniciais;
   window.vgFecharSaldosIniciais = vgFecharSaldosIniciais;
   window.vgSalvarSaldoInicial = vgSalvarSaldoInicial;
+
+  // 🔍 Diagnóstico: mostra TODOS os valores brutos do cálculo da Liquidação Total
+  // Útil para entender por que a dedução não aparece como esperado
+  function vgDiagnosticarLiq() {
+    const dataEl = document.getElementById('vg-data');
+    const mesTodosEl = document.getElementById('vg-mes-todos');
+    let mes;
+    if (typeof _vgModo !== 'undefined' && _vgModo === 'todos' && mesTodosEl && mesTodosEl.value) {
+      mes = mesTodosEl.value;
+    } else if (dataEl && dataEl.value) {
+      mes = dataEl.value.slice(0,7);
+    } else {
+      mes = (typeof today !== 'undefined' ? today : new Date().toISOString().slice(0,10)).slice(0,7);
+    }
+
+    const old = document.getElementById('vg-diag-liq-modal');
+    if (old) document.body.removeChild(old);
+
+    const overlay = document.createElement('div');
+    overlay.id = 'vg-diag-liq-modal';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.55);display:flex;align-items:flex-start;justify-content:center;z-index:99999;overflow-y:auto;padding:24px';
+
+    let html = '<div style="background:#fff;border-radius:8px;padding:22px;max-width:1200px;width:100%;font-family:inherit;box-shadow:0 8px 32px rgba(0,0,0,0.25);margin:auto">';
+    html += '<h3 style="margin:0 0 8px;color:#1a3a6e;font-size:16px">🔍 Diagnóstico Liquidação — ' + mes + '</h3>';
+    html += '<p style="margin:0 0 14px;font-size:12px;color:#555;line-height:1.6">';
+    html += 'Este painel mostra exatamente os valores brutos usados no cálculo da Liquidação Total no Quadro Mensal.<br>';
+    html += '<strong>Fórmula:</strong> Saldo Liq = Liq.Inicial − Σ Liq diária (somaLiq é negativa, então PAGA a dívida)<br>';
+    html += '<strong>Override Manual:</strong> Se você editou manualmente, esse valor sobrescreve o cálculo.<br>';
+    html += '<strong>Override × Cálculo:</strong> Se há override, a coluna "Saldo Liq mostrado" usa o override; senão, usa o cálculo.';
+    html += '</p>';
+    html += '<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:#1a3a6e;color:#fff">';
+    html += '<th style="padding:6px;text-align:left">Agência</th>';
+    html += '<th style="padding:6px;text-align:right">Liq.Inicial<br><small style="font-weight:400;opacity:0.85">(saldos_mensais)</small></th>';
+    html += '<th style="padding:6px;text-align:right">Σ Liq diária<br><small style="font-weight:400;opacity:0.85">(somaLiq)</small></th>';
+    html += '<th style="padding:6px;text-align:right">Cálculo<br><small style="font-weight:400;opacity:0.85">(liqIni − somaLiq)</small></th>';
+    html += '<th style="padding:6px;text-align:right">Override Manual<br><small style="font-weight:400;opacity:0.85">(consolidado_agencias_override)</small></th>';
+    html += '<th style="padding:6px;text-align:right">Saldo Liq MOSTRADO<br><small style="font-weight:400;opacity:0.85">na tabela</small></th>';
+    html += '<th style="padding:6px;text-align:center">Diagnóstico</th>';
+    html += '</tr></thead><tbody>';
+
+    let ovrAll = {};
+    try { ovrAll = JSON.parse(localStorage.getItem(VG_AG_OVR_KEY) || '{}'); } catch(_) {}
+
+    VG_AGENCIAS.forEach(ag => {
+      const acum = calcAcumuladoMes(ag, mes) || {};
+      const liqIni = Number(acum.liqInicial) || 0;
+      const sLiq = Number(acum.somaLiq) || 0;
+      const calc = liqIni - sLiq;  // diminui a dívida (somaLiq é negativa)
+      const override = (ovrAll[mes] && ovrAll[mes][ag] && ovrAll[mes][ag].liqTotal !== undefined && ovrAll[mes][ag].liqTotal !== null) ? Number(ovrAll[mes][ag].liqTotal) : null;
+      const mostrado = (override !== null) ? override : calc;
+
+      let diag = '', diagCor = '#0d7a5f';
+      if (override !== null) {
+        diag = '⚠️ Override travando o cálculo'; diagCor = '#a23026';
+      } else if (liqIni === 0 && sLiq === 0) {
+        diag = '⚪ Sem dados'; diagCor = '#888';
+      } else if (liqIni === 0 && sLiq !== 0) {
+        diag = '⚠️ Liq.Inicial = 0 — preencher!'; diagCor = '#e67e22';
+      } else if (sLiq === 0 && liqIni !== 0) {
+        diag = '⚪ Sem lançamentos'; diagCor = '#888';
+      } else {
+        diag = '✅ OK — deduzindo'; diagCor = '#0d7a5f';
+      }
+
+      html += '<tr style="border-bottom:1px solid #e0e4ec">';
+      html += '<td style="padding:5px 6px;font-weight:600;color:#1a3a6e">' + ag + '</td>';
+      html += '<td style="padding:5px 6px;text-align:right;color:' + (liqIni < 0 ? '#a23026' : (liqIni > 0 ? '#0d7a5f' : '#aaa')) + '">' + fmtBRL(liqIni) + '</td>';
+      html += '<td style="padding:5px 6px;text-align:right;color:#a23026">' + fmtBRL(sLiq) + '</td>';
+      html += '<td style="padding:5px 6px;text-align:right;font-weight:700;color:' + (calc < 0 ? '#a23026' : '#0d7a5f') + '">' + fmtBRL(calc) + '</td>';
+      html += '<td style="padding:5px 6px;text-align:right;color:' + (override !== null ? '#a23026' : '#aaa') + ';font-weight:' + (override !== null ? '700' : 'normal') + '">' + (override !== null ? fmtBRL(override) : '— sem override —') + '</td>';
+      html += '<td style="padding:5px 6px;text-align:right;font-weight:700;background:#f5f7fb;color:' + (mostrado < 0 ? '#a23026' : '#0d7a5f') + '">' + fmtBRL(mostrado) + '</td>';
+      html += '<td style="padding:5px 6px;text-align:center;color:' + diagCor + ';font-size:10px">' + diag + '</td>';
+      html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    html += '<div style="margin-top:14px;padding:10px;background:#fff8e1;border-radius:4px;border-left:4px solid #e67e22;font-size:12px;color:#666">';
+    html += '<strong>💡 Como interpretar:</strong><br>';
+    html += '• Se "Override Manual" tem valor → ele sobrescreve o cálculo. Use o botão 🔄 Resetar overrides para apagar.<br>';
+    html += '• Se "Liq.Inicial = 0" e tem lançamentos → preencha a Liq Inicial no modal "📋 Saldos Iniciais".<br>';
+    html += '• Se está OK ✅ mas o valor mostrado parece errado → me mande print desta tela que entendo melhor.';
+    html += '</div>';
+    html += '<div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">';
+    html += '<button onclick="vgFecharDiagnosticoLiq()" class="btn btn-secondary btn-sm" style="padding:7px 14px">Fechar</button>';
+    html += '</div>';
+    html += '</div>';
+
+    overlay.innerHTML = html;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) vgFecharDiagnosticoLiq(); });
+  }
+
+  function vgFecharDiagnosticoLiq() {
+    const m = document.getElementById('vg-diag-liq-modal');
+    if (m) document.body.removeChild(m);
+  }
+
+  window.vgDiagnosticarLiq = vgDiagnosticarLiq;
+  window.vgFecharDiagnosticoLiq = vgFecharDiagnosticoLiq;
 
   // 🧹 Limpa TUDO de TODAS as agências em TODOS os meses
   // Tripla confirmação + backup + upload imediato.
@@ -3562,6 +3696,7 @@
       const valRealVop = (ovrRealVop !== null) ? ovrRealVop : acum.somaVop;
       const valNetAtual = (ovrNetAtual !== null) ? ovrNetAtual : acum.netAtual;
       // Net Fechamento usa os valores efetivos (com overrides aplicados) ou pode ser sobrescrito direto
+      // Net Fechamento Total = Saldo Desc + Saldo Quente + Saldo ARV + Saldo Liq + Net Atual (fórmula da planilha)
       const valNetFechCalc = valSdDesc + valSdQuen + valSdArv + valLiq + valNetAtual;
       const valNetFech = (ovrNetFech !== null) ? ovrNetFech : valNetFechCalc;
 
@@ -4721,9 +4856,9 @@
     const saldoDesc   = (descIni   || acum.descInicial) - (acum.somaDesc + previewDesc);
     const saldoQuente = (quenteIni || acum.quenteIni)   - (acum.somaLp   + previewLp);
     const saldoArv    = (arvIni    || acum.arvInicial)  - (acum.somaArv  + previewArv);
-    const saldoLiq    = (liqIni    || acum.liqInicial)  + liqTotal;     // liqIni + Σ liq
+    const saldoLiq    = (liqIni    || acum.liqInicial)  - liqTotal;     // liqIni − Σ liq (somaLiq é negativa, então DIMINUI a dívida)
     const netAtual    = acum.somaNetDia + previewNet;                    // Σ Net Dia do mês
-    // Net Fechamento Total = Desc + Quente + ARV + Liq + NetAtual (fórmula da planilha)
+    // Net Fechamento Total = Saldo Desc + Saldo Quente + Saldo ARV + Saldo Liq + Net Atual (fórmula da planilha)
     const netFechamento = saldoDesc + saldoQuente + saldoArv + saldoLiq + netAtual;
     const morno   = mornoIni;
     const netProj = netProjMesInput;
@@ -4938,9 +5073,9 @@
     acum.saldoDesc   = acum.descInicial - acum.somaDesc;     // Desc.Ini − Σ Prod.Desconto
     acum.saldoQuente = acum.quenteIni   - acum.somaLp;       // Quente − Σ Longo Prazo
     acum.saldoArv    = acum.arvInicial  - acum.somaArv;      // ARV.Ini − Σ ARV diário
-    acum.saldoLiq    = acum.liqInicial  + acum.somaLiq;      // Liq.Ini + Σ Liq (liq é negativa, então diminui)
+    acum.saldoLiq    = acum.liqInicial  - acum.somaLiq;      // Liq.Ini − Σ Liq (somaLiq é negativa, então DIMINUI a dívida)
     acum.netAtual    = acum.somaNetDia;                       // Net Atual = Σ Net Dia do mês
-    // Net Fechamento Total = Desc + Quente + ARV + Liq + NetAtual (fórmula da planilha)
+    // Net Fechamento Total = Saldo Desc + Saldo Quente + Saldo ARV + Saldo Liq + Net Atual (fórmula da planilha)
     acum.netFechamento = acum.saldoDesc + acum.saldoQuente + acum.saldoArv + acum.saldoLiq + acum.netAtual;
     return acum;
   }
