@@ -4489,8 +4489,9 @@
       const totalVop  = doMes.reduce((s,r) => s + ((Number(r.prodDesconto)||0)+(Number(r.antDemais)||0)+(Number(r.longoPrazo)||0)+(Number(r.arvDia)||0)), 0);
       const totalNet  = doMes.reduce((s,r) => s + (Number(r.netDia)||0), 0);
 
-      // Meta = soma das metas mensais de todas as agências
-      const totalMeta = Object.values(saldos).reduce((s,ag) => s + (Number(ag.metaVopInicial)||0), 0);
+      // Meta = soma das metas mensais de todas as agências (suporta estrutura nova por mês e antiga)
+      const _saldosMes = (saldos[mes] && typeof saldos[mes] === 'object') ? saldos[mes] : saldos;
+      const totalMeta = Object.values(_saldosMes).reduce((s,ag) => s + (ag && typeof ag === 'object' ? (Number(ag.metaVopInicial)||0) : 0), 0);
 
       // VOP do dia atual (para o card VOP Dia)
       const doDia    = store.filter(r => r.date === date);
