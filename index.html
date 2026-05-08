@@ -1073,6 +1073,7 @@
     store = store.filter(r => !(r.agency === payload.agency && r.gerente === payload.gerente && r.date === payload.date));
     store.push(payload);
     localStorage.setItem(PROD_KEY, JSON.stringify(store));
+    _dbSalvarLancamentoGerente(payload);
   }
 
   function carregarProdGerente(agency, date) {
@@ -1154,6 +1155,7 @@
     let store = JSON.parse(localStorage.getItem(PROD_KEY) || '[]');
     store = store.filter(r => !(r.agency === agency && r.gerente === gerente && r.date === date));
     localStorage.setItem(PROD_KEY, JSON.stringify(store));
+    _dbRemoverLancamentoGerente(agency, date, gerente);
     // Limpa inputs
     ['desc','ant','lp','liq'].forEach(f => {
       const el = document.getElementById('pd-'+f+'-'+rowId);
@@ -2385,32 +2387,38 @@
   window._subirTudoAgora = _subirTudoAgora;
 
   // ── Cache em memória — fonte de verdade (substitui localStorage para dados do banco) ──
-  const _CHAVES_BANCO = ['lancamentos_agencias','saldos_mensais_agencias','gerentes_agencias','consolidado_agencias_override','consolidado_regional_override'];
+  const _CHAVES_BANCO = ['lancamentos_agencias','saldos_mensais_agencias','gerentes_agencias','consolidado_agencias_override','consolidado_regional_override','lancamentos_prod_gerente','historico_trimestre'];
   const _cache = {
-    lancamentos:  [],   // STORE_KEY
-    saldos:       {},   // SALDOS_KEY
-    gerentes:     [],   // GER_KEY
-    ovrsAgencia:  {},   // VG_AG_OVR_KEY
-    ovrsRegional: {},   // VG_CONS_KEY
-    carregado:    false
+    lancamentos:       [],  // STORE_KEY
+    saldos:            {},  // SALDOS_KEY
+    gerentes:          [],  // GER_KEY
+    ovrsAgencia:       {},  // VG_AG_OVR_KEY
+    ovrsRegional:      {},  // VG_CONS_KEY
+    lancamentosGer:    [],  // PROD_KEY
+    historicoTrim:     {},  // TRIM_KEY
+    carregado:         false
   };
 
   // Mapeia chave → campo do _cache
   function _cacheGet(chave) {
-    if (chave === STORE_KEY)      return JSON.stringify(_cache.lancamentos);
-    if (chave === SALDOS_KEY)     return JSON.stringify(_cache.saldos);
-    if (chave === GER_KEY)        return JSON.stringify(_cache.gerentes);
-    if (chave === VG_AG_OVR_KEY)  return JSON.stringify(_cache.ovrsAgencia);
-    if (chave === VG_CONS_KEY)    return JSON.stringify(_cache.ovrsRegional);
+    if (chave === STORE_KEY)                    return JSON.stringify(_cache.lancamentos);
+    if (chave === SALDOS_KEY)                   return JSON.stringify(_cache.saldos);
+    if (chave === GER_KEY)                      return JSON.stringify(_cache.gerentes);
+    if (chave === VG_AG_OVR_KEY)                return JSON.stringify(_cache.ovrsAgencia);
+    if (chave === VG_CONS_KEY)                  return JSON.stringify(_cache.ovrsRegional);
+    if (chave === 'lancamentos_prod_gerente')   return JSON.stringify(_cache.lancamentosGer);
+    if (chave === 'historico_trimestre')        return JSON.stringify(_cache.historicoTrim);
     return null;
   }
   function _cacheSet(chave, valor) {
     try {
-      if (chave === STORE_KEY)      { _cache.lancamentos  = JSON.parse(valor); return true; }
-      if (chave === SALDOS_KEY)     { _cache.saldos       = JSON.parse(valor); return true; }
-      if (chave === GER_KEY)        { _cache.gerentes      = JSON.parse(valor); return true; }
-      if (chave === VG_AG_OVR_KEY)  { _cache.ovrsAgencia  = JSON.parse(valor); return true; }
-      if (chave === VG_CONS_KEY)    { _cache.ovrsRegional = JSON.parse(valor); return true; }
+      if (chave === STORE_KEY)                   { _cache.lancamentos    = JSON.parse(valor); return true; }
+      if (chave === SALDOS_KEY)                  { _cache.saldos         = JSON.parse(valor); return true; }
+      if (chave === GER_KEY)                     { _cache.gerentes        = JSON.parse(valor); return true; }
+      if (chave === VG_AG_OVR_KEY)               { _cache.ovrsAgencia    = JSON.parse(valor); return true; }
+      if (chave === VG_CONS_KEY)                 { _cache.ovrsRegional   = JSON.parse(valor); return true; }
+      if (chave === 'lancamentos_prod_gerente')  { _cache.lancamentosGer = JSON.parse(valor); return true; }
+      if (chave === 'historico_trimestre')       { _cache.historicoTrim  = JSON.parse(valor); return true; }
     } catch(_) {}
     return false;
   }
@@ -2609,6 +2617,32 @@
         ovrsReg.forEach(r => {
           _cache.ovrsRegional[mes][r.campo] = r.valor;
         });
+      }
+
+      // 6. Lançamentos gerentes → _cache.lancamentosGer
+      const { data: lancsGer } = await _supaClient.from('lancamentos_gerentes').select('*').gte('date', primeiroDia);
+      if (lancsGer) {
+        const outrosMesesGer = _cache.lancamentosGer.filter(r => !r.date || !r.date.startsWith(mes));
+        const doMesGer = lancsGer.map(r => ({
+          agency:          r.agency,
+          date:            r.date,
+          gerente:         r.gerente,
+          prodDesconto:    Number(r.prod_desconto)    || 0,
+          antDemais:       Number(r.ant_demais)       || 0,
+          longoPrazo:      Number(r.longo_prazo)      || 0,
+          liquidacaoTotal: Number(r.liquidacao_total) || 0,
+          pipe:            Number(r.pipe)             || 0,
+          netProjetado:    Number(r.net_projetado)    || 0,
+        }));
+        _cache.lancamentosGer = [...outrosMesesGer, ...doMesGer];
+      }
+
+      // 7. Histórico trimestral → _cache.historicoTrim
+      const { data: histTrim } = await _supaClient.from('historico_trimestral').select('mes, dados, arquivado_em');
+      if (histTrim) {
+        const hist = {};
+        histTrim.forEach(r => { hist[r.mes] = typeof r.dados === 'string' ? JSON.parse(r.dados) : r.dados; });
+        _cache.historicoTrim = hist;
       }
 
       _cache.carregado = true;
@@ -3749,12 +3783,53 @@
     }
   }
 
+  // Salva lançamento de gerente na tabela lancamentos_gerentes
+  async function _dbSalvarLancamentoGerente(payload) {
+    if (!_supaClient) return;
+    try {
+      await _supaClient.from('lancamentos_gerentes').upsert({
+        agency:          payload.agency,
+        date:            payload.date,
+        gerente:         payload.gerente,
+        prod_desconto:   Number(payload.prodDesconto)    || 0,
+        ant_demais:      Number(payload.antDemais)       || 0,
+        longo_prazo:     Number(payload.longoPrazo)      || 0,
+        liquidacao_total:Number(payload.liquidacaoTotal) || 0,
+        pipe:            Number(payload.pipe)            || 0,
+        net_projetado:   Number(payload.netProjetado)    || 0,
+        atualizado_em:   new Date().toISOString()
+      }, { onConflict: 'agency,date,gerente' }).select();
+    } catch(e) { console.warn('[DB] erro salvar lancamento gerente:', e); }
+  }
+
+  // Remove lançamento de gerente
+  async function _dbRemoverLancamentoGerente(agency, date, gerente) {
+    if (!_supaClient) return;
+    try {
+      await _supaClient.from('lancamentos_gerentes').delete()
+        .eq('agency', agency).eq('date', date).eq('gerente', gerente);
+    } catch(e) { console.warn('[DB] erro remover lancamento gerente:', e); }
+  }
+
+  // Salva histórico trimestral
+  async function _dbSalvarHistoricoTrimestral(mes, dados) {
+    if (!_supaClient) return;
+    try {
+      await _supaClient.from('historico_trimestral').upsert({
+        mes,
+        dados,
+        arquivado_em: new Date().toISOString()
+      }, { onConflict: 'mes' }).select();
+    } catch(e) { console.warn('[DB] erro salvar historico trimestral:', e); }
+  }
+
   // Remove todos os lançamentos de um mês das novas tabelas
   async function _dbLimparMes(mes) {
     if (!_supaClient) return;
     try {
       await Promise.all([
         _supaClient.from('lancamentos_diarios').delete().gte('date', mes+'-01').lte('date', mes+'-31'),
+        _supaClient.from('lancamentos_gerentes').delete().gte('date', mes+'-01').lte('date', mes+'-31'),
         _supaClient.from('saldos_iniciais').delete().eq('mes', mes),
         _supaClient.from('overrides_agencia').delete().eq('mes', mes),
         _supaClient.from('overrides_regional').delete().eq('mes', mes),
@@ -3781,6 +3856,7 @@
     try {
       await Promise.all([
         _supaClient.from('lancamentos_diarios').delete().neq('id', 0),
+        _supaClient.from('lancamentos_gerentes').delete().neq('id', 0),
         _supaClient.from('saldos_iniciais').delete().neq('id', 0),
         _supaClient.from('overrides_agencia').delete().neq('id', 0),
         _supaClient.from('overrides_regional').delete().neq('id', 0),
@@ -3799,15 +3875,16 @@
 
       // Coleta todos os dados atuais
       const dados = {
-        geradoEm:           agora.toISOString(),
-        versao:             '2.0',
-        lancamentos_diarios: JSON.parse(localStorage.getItem(STORE_KEY)       || '[]'),
-        saldos_iniciais:     JSON.parse(localStorage.getItem(SALDOS_KEY)      || '{}'),
-        gerentes:            JSON.parse(localStorage.getItem(GER_KEY)         || '[]'),
-        overrides_agencia:   JSON.parse(localStorage.getItem(VG_AG_OVR_KEY)   || '{}'),
-        overrides_regional:  JSON.parse(localStorage.getItem(VG_CONS_KEY)     || '{}'),
-        prod_gerente:        JSON.parse(localStorage.getItem(PROD_KEY)        || '[]'),
-        arquivados:          JSON.parse(localStorage.getItem(VG_BACKUP_KEY)   || '{}'),
+        geradoEm:             agora.toISOString(),
+        versao:               '3.0',
+        lancamentos_diarios:  _cache.lancamentos,
+        saldos_iniciais:      _cache.saldos,
+        gerentes:             _cache.gerentes,
+        overrides_agencia:    _cache.ovrsAgencia,
+        overrides_regional:   _cache.ovrsRegional,
+        lancamentos_gerentes: _cache.lancamentosGer,
+        historico_trimestral: _cache.historicoTrim,
+        arquivados:           JSON.parse(localStorage.getItem(VG_BACKUP_KEY) || '{}'),
       };
 
       const totalLanc = dados.lancamentos_diarios.length;
@@ -6541,6 +6618,7 @@
         archivedAt:   new Date().toISOString()
       };
       localStorage.setItem(TRIM_KEY, JSON.stringify(historico));
+      _dbSalvarHistoricoTrimestral(mesAtual, historico[mesAtual]);
     } catch(e) { console.warn('Erro arquivando mês:', e); }
 
     // Move o seletor de mês de referência para o próximo
