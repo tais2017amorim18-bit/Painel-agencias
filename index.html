@@ -2259,6 +2259,26 @@
   }
 
   // Baixa UMA chave do banco e popula o localStorage
+  // Merge de arrays por chave composta (ex: agency+date) — garante que nenhum lançamento se perca
+  // Dados locais têm prioridade sobre remotos (quem está editando sabe o que está fazendo)
+  // Dados remotos que não existem localmente são preservados (não perde lançamentos de outros computadores)
+  function _mergeArrayPorChave(local, remote, chaves) {
+    if (!Array.isArray(local)) local = [];
+    if (!Array.isArray(remote)) remote = [];
+    const map = {};
+    remote.forEach(r => {
+      if (!r) return;
+      const k = chaves.map(c => r[c]).join('||');
+      map[k] = r;
+    });
+    local.forEach(r => {
+      if (!r) return;
+      const k = chaves.map(c => r[c]).join('||');
+      map[k] = r;
+    });
+    return Object.values(map);
+  }
+
   async function _baixarChave(chave) {
     if (!_supaClient) return;
     try {
@@ -2272,7 +2292,16 @@
         if (typeof v === 'string') {
           try { v = JSON.parse(v); } catch(_) { /* mantém string */ }
         }
-        // Marca como syncing para o setItem interceptado NÃO replicar de volta
+        // Para lançamentos diários: MERGE em vez de substituir
+        // Garante que lançamentos de outros computadores não sejam perdidos
+        if (chave === STORE_KEY && Array.isArray(v)) {
+          const local = JSON.parse(localStorage.getItem(chave) || '[]');
+          const merged = _mergeArrayPorChave(local, v, ['agency', 'date']);
+          _supaSyncing = true;
+          try { localStorage.setItem(chave, JSON.stringify(merged)); } finally { _supaSyncing = false; }
+          return;
+        }
+        // Para demais chaves: comportamento normal (substituição)
         _supaSyncing = true;
         try {
           localStorage.setItem(chave, typeof v === 'string' ? v : JSON.stringify(v));
@@ -2295,6 +2324,18 @@
       try {
         let parsed;
         try { parsed = JSON.parse(raw); } catch(_) { parsed = raw; }
+        // Para lançamentos diários: faz MERGE com o banco antes de salvar
+        // Garante que dados de outros computadores não sejam sobrescritos
+        if (chave === STORE_KEY && Array.isArray(parsed)) {
+          try {
+            const { data: rowAtual } = await _supaClient.from('app_storage').select('valor').eq('chave', chave).maybeSingle();
+            if (rowAtual && rowAtual.valor != null) {
+              let remoto = rowAtual.valor;
+              if (typeof remoto === 'string') try { remoto = JSON.parse(remoto); } catch(_) {}
+              if (Array.isArray(remoto)) parsed = _mergeArrayPorChave(parsed, remoto, ['agency', 'date']);
+            }
+          } catch(e) { console.warn('[Supabase] merge pre-save erro:', e); }
+        }
         await _supaClient.from('app_storage').upsert({
           chave: chave,
           valor: parsed,
