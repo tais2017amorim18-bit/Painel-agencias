@@ -2414,7 +2414,7 @@
         vop_dia:          Number(payload.vopDia)          || 0,
         net_dia:          Number(payload.netDia)          || 0,
         atualizado_em:    new Date().toISOString()
-      }, { onConflict: 'agency,date' });
+      }, { onConflict: 'agency,date' }).select();
     } catch(e) { console.warn('[DB] erro salvar lancamento:', e); }
   }
 
@@ -2433,7 +2433,7 @@
         morno_inicial:  Number(saldos.mornoInicial)    || 0,
         net_proj_mes:   Number(saldos.netProjMes)      || 0,
         atualizado_em:  new Date().toISOString()
-      }, { onConflict: 'agency,mes' });
+      }, { onConflict: 'agency,mes' }).select();
     } catch(e) { console.warn('[DB] erro salvar saldo:', e); }
   }
 
@@ -2448,7 +2448,7 @@
         await _supaClient.from('overrides_agencia').upsert({
           agency, mes, campo, valor: Number(valor),
           atualizado_em: new Date().toISOString()
-        }, { onConflict: 'agency,mes,campo' });
+        }, { onConflict: 'agency,mes,campo' }).select();
       }
     } catch(e) { console.warn('[DB] erro override agencia:', e); }
   }
@@ -2464,7 +2464,7 @@
         await _supaClient.from('overrides_regional').upsert({
           mes, campo, valor: Number(valor),
           atualizado_em: new Date().toISOString()
-        }, { onConflict: 'mes,campo' });
+        }, { onConflict: 'mes,campo' }).select();
       }
     } catch(e) { console.warn('[DB] erro override regional:', e); }
   }
@@ -2476,7 +2476,7 @@
       await _supaClient.from('gerentes_ag').upsert(
         { agencia, nome, atualizado_em: new Date().toISOString() },
         { onConflict: 'agencia,nome' }
-      );
+      ).select();
     } catch(e) { console.warn('[DB] erro salvar gerente:', e); }
   }
 
