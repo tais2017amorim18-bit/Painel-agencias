@@ -3098,7 +3098,7 @@
       // Força upload imediato pra evitar race condition
       let aviso = '';
       if (typeof _subirTudoAgora === 'function' && typeof _supaClient !== 'undefined' && _supaClient) {
-        try { await _subirTudoAgora(); aviso = '\n☁️ Banco atualizado.'; } catch(e) { aviso = '\n⚠️ Erro ao subir para o banco — recarregue.'; console.error(e); }
+        try { await _dbLimparMes(mes); aviso = '\n☁️ Banco atualizado.'; } catch(e) { aviso = '\n⚠️ Erro ao limpar banco.'; console.error(e); }
       }
 
       alert('✅ Mês ' + mesPtBr + ' completamente limpo (' + totalReg + ' itens removidos).' + aviso + '\n\n' +
@@ -3305,7 +3305,7 @@
         // Força upload imediato pra evitar race condition (debounce de 400ms ignorado)
         let aviso = '';
         if (typeof _subirTudoAgora === 'function' && typeof _supaClient !== 'undefined' && _supaClient) {
-          try { await _subirTudoAgora(); aviso = '\n☁️ Banco atualizado.'; } catch(e) { aviso = '\n⚠️ Erro ao subir para o banco — recarregue.'; console.error(e); }
+          try { await _dbLimparAgencia(agSel, mes); aviso = '\n☁️ Banco atualizado.'; } catch(e) { aviso = '\n⚠️ Erro ao limpar banco.'; console.error(e); }
         }
         alert('✅ Dados de ' + ag + ' ' + escopoTxt + ' apagados (' + r.total + ' itens).' + aviso + '\n\n🛡️ Backup salvo (chave: ' + chaveBkp + ').');
         if (typeof renderVisaoGeral === 'function') renderVisaoGeral();
@@ -3449,7 +3449,8 @@
     html += '<strong>Saldo Quente</strong> = Quente Inicial − Σ Longo Prazo &nbsp;|&nbsp;';
     html += '<strong>Saldo ARV</strong> = ARV Inicial − Σ ARV diário';
     html += '</p>';
-    html += '<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:#1a3a6e;color:#fff">';
+    html += '<div style="overflow-x:auto;width:100%">';
+    html += '<table style="width:100%;border-collapse:collapse;font-size:11px;min-width:900px"><thead><tr style="background:#1a3a6e;color:#fff">';
     html += '<th style="padding:6px;text-align:left">Agência</th>';
     html += '<th style="padding:6px;text-align:right">Desc. Inicial</th>';
     html += '<th style="padding:6px;text-align:right;background:#0d6e56">Σ Prod.Desconto<br><small style="font-weight:400;opacity:0.85">(deduzido)</small></th>';
@@ -3503,6 +3504,7 @@
     });
 
     html += '</tbody></table>';
+    html += '</div>';
     html += '<div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">';
     html += '<button onclick="vgFecharSaldosIniciais()" class="btn btn-secondary btn-sm" style="padding:7px 14px">Fechar</button>';
     html += '<button onclick="vgFecharSaldosIniciais();renderVisaoGeral()" class="btn btn-primary btn-sm" style="padding:7px 14px;background:#0d7a5f;border-color:#0d7a5f">💾 Salvar e Atualizar Tabela</button>';
@@ -3567,7 +3569,8 @@
     html += '<strong>Override Manual:</strong> Se você editou manualmente, esse valor sobrescreve o cálculo.<br>';
     html += '<strong>Override × Cálculo:</strong> Se há override, a coluna "Saldo Liq mostrado" usa o override; senão, usa o cálculo.';
     html += '</p>';
-    html += '<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:#1a3a6e;color:#fff">';
+    html += '<div style="overflow-x:auto;width:100%">';
+    html += '<table style="width:100%;border-collapse:collapse;font-size:11px;min-width:900px"><thead><tr style="background:#1a3a6e;color:#fff">';
     html += '<th style="padding:6px;text-align:left">Agência</th>';
     html += '<th style="padding:6px;text-align:right">Liq.Inicial<br><small style="font-weight:400;opacity:0.85">(saldos_mensais)</small></th>';
     html += '<th style="padding:6px;text-align:right">Σ Liq diária<br><small style="font-weight:400;opacity:0.85">(somaLiq)</small></th>';
@@ -3613,6 +3616,7 @@
     });
 
     html += '</tbody></table>';
+    html += '</div>';
     html += '<div style="margin-top:14px;padding:10px;background:#fff8e1;border-radius:4px;border-left:4px solid #e67e22;font-size:12px;color:#666">';
     html += '<strong>💡 Como interpretar:</strong><br>';
     html += '• Se "Override Manual" tem valor → ele sobrescreve o cálculo. Use o botão 🔄 Resetar overrides para apagar.<br>';
@@ -3729,8 +3733,8 @@
       // ─── UPLOAD IMEDIATO PRO SUPABASE (sem debounce) ─────
       let aviso = '';
       if (typeof _subirTudoAgora === 'function' && typeof _supaClient !== 'undefined' && _supaClient) {
-        try { await _subirTudoAgora(); aviso = '\n☁️ Banco atualizado.'; }
-        catch(e) { aviso = '\n⚠️ Erro ao subir para o banco — recarregue a página.'; console.error(e); }
+        try { await _dbLimparTudo(); aviso = '\n☁️ Banco atualizado.'; }
+        catch(e) { aviso = '\n⚠️ Erro ao limpar banco.'; console.error(e); }
       }
 
       alert(
@@ -3743,6 +3747,45 @@
       alert('❌ Erro durante a limpeza total:\n' + (err && err.message ? err.message : err) + '\n\nA operação foi interrompida.');
       console.error('vgLimparTudoAbrir erro:', err);
     }
+  }
+
+  // Remove todos os lançamentos de um mês das novas tabelas
+  async function _dbLimparMes(mes) {
+    if (!_supaClient) return;
+    try {
+      await Promise.all([
+        _supaClient.from('lancamentos_diarios').delete().gte('date', mes+'-01').lte('date', mes+'-31'),
+        _supaClient.from('saldos_iniciais').delete().eq('mes', mes),
+        _supaClient.from('overrides_agencia').delete().eq('mes', mes),
+        _supaClient.from('overrides_regional').delete().eq('mes', mes),
+      ]);
+    } catch(e) { console.warn('[DB] erro limpar mês:', e); }
+  }
+
+  // Remove todos os dados de uma agência num mês
+  async function _dbLimparAgencia(agency, mes) {
+    if (!_supaClient) return;
+    try {
+      const q = _supaClient.from('lancamentos_diarios').delete().eq('agency', agency);
+      await Promise.all([
+        mes ? q.gte('date', mes+'-01').lte('date', mes+'-31') : q,
+        _supaClient.from('saldos_iniciais').delete().eq('agency', agency).eq('mes', mes || ''),
+        _supaClient.from('overrides_agencia').delete().eq('agency', agency).eq('mes', mes || ''),
+      ]);
+    } catch(e) { console.warn('[DB] erro limpar agência:', e); }
+  }
+
+  // Remove TUDO das novas tabelas
+  async function _dbLimparTudo() {
+    if (!_supaClient) return;
+    try {
+      await Promise.all([
+        _supaClient.from('lancamentos_diarios').delete().neq('id', 0),
+        _supaClient.from('saldos_iniciais').delete().neq('id', 0),
+        _supaClient.from('overrides_agencia').delete().neq('id', 0),
+        _supaClient.from('overrides_regional').delete().neq('id', 0),
+      ]);
+    } catch(e) { console.warn('[DB] erro limpar tudo:', e); }
   }
 
   // ── Backup manual: download JSON + salva no banco ──────────────────────
