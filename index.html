@@ -2683,7 +2683,17 @@
   window.vgEditarLinhaDiaria = vgEditarLinhaDiaria;
 
   function vgConcluirLinhaDiaria(agency, date) {
-    _vgLinhasEmEdicao.delete(_vgChaveLinha(agency, date));
+    // Força o blur de todos os inputs da linha antes de concluir
+    // (garante que onblur seja disparado mesmo quando clica direto em ✔ OK)
+    const chave = _vgChaveLinha(agency, date);
+    document.querySelectorAll('input.vg-input').forEach(function(inp) {
+      if (inp.closest('tr')) inp.blur();
+    });
+    _vgLinhasEmEdicao.delete(chave);
+    // Salva explicitamente o registro completo no banco
+    const store = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+    const row = store.find(function(r){ return r.agency === agency && r.date === date; });
+    if (row) _dbSalvarLancamento(row);
     if (typeof renderVisaoGeral === 'function') renderVisaoGeral();
   }
   window.vgConcluirLinhaDiaria = vgConcluirLinhaDiaria;
@@ -2901,8 +2911,15 @@
 
   // Salva produção do Quadro Diário: limpa todas as linhas em edição e atualiza totais
   function vgSalvarProd() {
+    // Força blur de todos os inputs antes de salvar
+    document.querySelectorAll('input.vg-input').forEach(function(inp){ inp.blur(); });
     _vgLinhasEmEdicao.clear();
     _vgLimparPendente();
+    // Salva todos os lançamentos do dia atual no banco
+    const dataEl = document.getElementById('vg-data');
+    const dataSel = (dataEl && dataEl.value) ? dataEl.value : today;
+    const store = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+    store.filter(function(r){ return r.date === dataSel; }).forEach(function(r){ _dbSalvarLancamento(r); });
     if (typeof renderVisaoGeral === 'function') renderVisaoGeral();
     showToast('✅ Produção salva — totais atualizados.');
   }
