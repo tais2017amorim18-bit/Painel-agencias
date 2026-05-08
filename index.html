@@ -4006,6 +4006,97 @@
     return { rowsHtml, regDia };
   }
 
+  // ── Migração automática: overrides → saldos iniciais ──────────────────
+  // Roda UMA VEZ por mês quando detecta overrides sem saldos iniciais correspondentes.
+  // Converte os valores congelados nos overrides de volta em saldos iniciais reais,
+  // remove os overrides e ativa o cálculo automático de dedução.
+  // Nunca apaga lançamentos diários. Nunca roda duas vezes para o mesmo mês.
+  async function _migrarOverridesParaSaldosSeNecessario() {
+    try {
+      const MIGR_KEY = '_migracao_ovr_saldos_feita';
+      let ovrAll = {};
+      try { ovrAll = JSON.parse(localStorage.getItem(VG_AG_OVR_KEY) || '{}'); } catch(_) {}
+      // Descobre quais meses têm overrides
+      const mesesComOvr = Object.keys(ovrAll);
+      if (!mesesComOvr.length) return; // nada a fazer
+
+      let saldosAll = {};
+      try { saldosAll = JSON.parse(localStorage.getItem(SALDOS_KEY) || '{}'); } catch(_) {}
+      saldosAll = _migrarSaldosSeNecessario(saldosAll);
+
+      let lanc = [];
+      try { lanc = JSON.parse(localStorage.getItem(STORE_KEY) || '[]'); } catch(_) {}
+
+      // Controle de meses já migrados (persiste no localStorage)
+      let feitos = {};
+      try { feitos = JSON.parse(localStorage.getItem(MIGR_KEY) || '{}'); } catch(_) {}
+
+      let houveAlteracao = false;
+
+      mesesComOvr.forEach(mes => {
+        // Já migrou este mês? Pula.
+        if (feitos[mes]) return;
+
+        const ovrMes = ovrAll[mes] || {};
+        const agencias = Object.keys(ovrMes);
+        if (!agencias.length) return;
+
+        if (!saldosAll[mes]) saldosAll[mes] = {};
+
+        agencias.forEach(ag => {
+          const ovr  = ovrMes[ag];
+          const rows = lanc.filter(r => r.agency === ag && r.date && r.date.startsWith(mes));
+
+          // Soma produção já lançada no período
+          const somaDesc = rows.reduce((s,r) => s + (Number(r.prodDesconto)||0), 0);
+          const somaLp   = rows.reduce((s,r) => s + (Number(r.longoPrazo)||0),   0);
+          const somaArv  = rows.reduce((s,r) => s + (Number(r.arvDia)||0),       0);
+          const somaLiq  = rows.reduce((s,r) => s + (Number(r.liquidacaoTotal)||0), 0);
+
+          // Saldo inicial real = override (saldo atual) + produção já lançada
+          const descIni   = (ovr.saldoDesc   !== undefined && ovr.saldoDesc   !== null ? Number(ovr.saldoDesc)   : 0) + somaDesc;
+          const quenteIni = (ovr.saldoQuente !== undefined && ovr.saldoQuente !== null ? Number(ovr.saldoQuente) : 0) + somaLp;
+          const arvIni    = (ovr.saldoArv    !== undefined && ovr.saldoArv    !== null ? Number(ovr.saldoArv)    : 0) + somaArv;
+          // liqTotal já é negativo; somaLiq também é negativo → liqInicial = -(abs(liqTotal)) - somaLiq
+          const liqIni    = -Math.abs(ovr.liqTotal !== undefined && ovr.liqTotal !== null ? Number(ovr.liqTotal) : 0) - somaLiq;
+
+          const exist = saldosAll[mes][ag] || {};
+          saldosAll[mes][ag] = Object.assign({}, exist, {
+            descInicial:    descIni,
+            quenteInicial:  quenteIni,
+            arvInicial:     arvIni,
+            liqInicial:     liqIni,
+            metaVopInicial: exist.metaVopInicial || 0,
+            mornoInicial:   exist.mornoInicial   || 0,
+            netProjMes:     exist.netProjMes     || 0,
+          });
+        });
+
+        // Marca mês como migrado e remove overrides do mês
+        feitos[mes] = new Date().toISOString();
+        delete ovrAll[mes];
+        houveAlteracao = true;
+        console.log('[Migração] Mês ' + mes + ' migrado: ' + agencias.length + ' agência(s).');
+      });
+
+      if (!houveAlteracao) return;
+
+      // Salva tudo
+      localStorage.setItem(SALDOS_KEY, JSON.stringify(saldosAll));
+      localStorage.setItem(VG_AG_OVR_KEY, JSON.stringify(ovrAll));
+      localStorage.setItem(MIGR_KEY, JSON.stringify(feitos));
+
+      // Sobe pro Supabase imediatamente
+      if (typeof _subirTudoAgora === 'function' && typeof _supaClient !== 'undefined' && _supaClient) {
+        try { await _subirTudoAgora(); } catch(e) { console.warn('[Migração] Erro ao subir Supabase:', e); }
+      }
+
+      console.log('[Migração] Concluída. Cálculo automático ativo.');
+    } catch(err) {
+      console.warn('[Migração] Erro (dados preservados):', err);
+    }
+  }
+
   initSupabase();
   // Atualiza dashboard a cada 30s, mas pula se houver input focado (evita perder foco enquanto edita)
   setInterval(() => {
@@ -4027,7 +4118,11 @@
   // Chama produtividade ao abrir se já tem mês
   setTimeout(() => { if(_prodMesEl && _prodMesEl.value) renderProdutividade(); }, 100);
   // Renderiza Visão Geral na carga inicial (depois que Supabase tentou sincronizar)
-  setTimeout(() => { if (typeof renderVisaoGeral === 'function') renderVisaoGeral(); }, 600);
+  // Roda migração automática após Supabase sincronizar, então renderiza
+  setTimeout(async () => {
+    await _migrarOverridesParaSaldosSeNecessario();
+    if (typeof renderVisaoGeral === 'function') renderVisaoGeral();
+  }, 700);
 
   const dias = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
   (function(){
