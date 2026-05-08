@@ -653,6 +653,7 @@
       <button class="btn btn-secondary btn-sm" onclick="vgLimparAgenciaAbrir()" style="font-size:11px;color:#a23026;border-color:#a23026" title="Apaga apenas os dados de uma agência específica no mês selecionado">🗑️ Limpar agência</button>
       <button class="btn btn-secondary btn-sm" onclick="vgLimparTudoAbrir()" style="font-size:11px;color:#fff;background:#a23026;border-color:#a23026" title="APAGA TUDO de TODAS as agências em TODOS os meses">🧹 Limpar TUDO</button>
       <button class="btn btn-secondary btn-sm" onclick="vgRestaurarBackupAbrir()" style="font-size:11px" title="Recuperar lançamentos arquivados de um mês anterior">↩️ Recuperar backup</button>
+      <button class="btn btn-primary btn-sm" onclick="vgBaixarBackup()" style="font-size:11px;background:#1a3a6e;border-color:#1a3a6e" title="Baixa um arquivo JSON com todos os dados do painel + salva no banco">⬇️ Baixar backup</button>
       <span id="vg-mensal-edit-status" style="font-size:11px;color:#a23026;font-weight:600;display:none">⚠️ Modo edição ATIVO — todas as agências editáveis</span>
     </div>
     <div class="formula-box">
@@ -1866,7 +1867,21 @@
     return JSON.parse(localStorage.getItem(GER_KEY) || '[]');
   }
   function salvarGerentes(lista) {
+    const anterior = JSON.parse(localStorage.getItem(GER_KEY) || '[]');
     localStorage.setItem(GER_KEY, JSON.stringify(lista));
+    // Sincroniza novas entradas e remoções na tabela gerentes_ag
+    if (_supaClient) {
+      // Adiciona novos
+      lista.forEach(g => {
+        const existia = anterior.some(a => a.agencia === g.agencia && a.nome === g.nome);
+        if (!existia) _dbSalvarGerente(g.agencia, g.nome);
+      });
+      // Remove os que saíram
+      anterior.forEach(g => {
+        const ainda = lista.some(a => a.agencia === g.agencia && a.nome === g.nome);
+        if (!ainda) _dbRemoverGerente(g.agencia, g.nome);
+      });
+    }
   }
   function gerentesDaAgencia(ag) {
     return carregarGerentes().filter(g => g.agencia === ag);
@@ -2382,10 +2397,191 @@
   })();
 
   // Sincroniza TODAS as chaves do banco para o localStorage (chamada na abertura e no botão Atualizar)
+  // ── Funções de CRUD nas novas tabelas ──────────────────────────────────
+
+  // Salva lançamento diário na tabela lancamentos_diarios
+  async function _dbSalvarLancamento(payload) {
+    if (!_supaClient) return;
+    try {
+      await _supaClient.from('lancamentos_diarios').upsert({
+        agency:           payload.agency,
+        date:             payload.date,
+        prod_desconto:    Number(payload.prodDesconto)    || 0,
+        ant_demais:       Number(payload.antDemais)       || 0,
+        longo_prazo:      Number(payload.longoPrazo)      || 0,
+        arv_dia:          Number(payload.arvDia)          || 0,
+        liquidacao_total: Number(payload.liquidacaoTotal) || 0,
+        vop_dia:          Number(payload.vopDia)          || 0,
+        net_dia:          Number(payload.netDia)          || 0,
+        atualizado_em:    new Date().toISOString()
+      }, { onConflict: 'agency,date' });
+    } catch(e) { console.warn('[DB] erro salvar lancamento:', e); }
+  }
+
+  // Salva saldo inicial na tabela saldos_iniciais
+  async function _dbSalvarSaldo(agency, mes, saldos) {
+    if (!_supaClient) return;
+    try {
+      await _supaClient.from('saldos_iniciais').upsert({
+        agency,
+        mes,
+        meta_vop:       Number(saldos.metaVopInicial)  || 0,
+        desc_inicial:   Number(saldos.descInicial)     || 0,
+        quente_inicial: Number(saldos.quenteInicial)   || 0,
+        arv_inicial:    Number(saldos.arvInicial)      || 0,
+        liq_inicial:    Number(saldos.liqInicial)      || 0,
+        morno_inicial:  Number(saldos.mornoInicial)    || 0,
+        net_proj_mes:   Number(saldos.netProjMes)      || 0,
+        atualizado_em:  new Date().toISOString()
+      }, { onConflict: 'agency,mes' });
+    } catch(e) { console.warn('[DB] erro salvar saldo:', e); }
+  }
+
+  // Salva override de agência na tabela overrides_agencia
+  async function _dbSalvarOverrideAgencia(agency, mes, campo, valor) {
+    if (!_supaClient) return;
+    try {
+      if (valor === null || valor === undefined) {
+        await _supaClient.from('overrides_agencia').delete()
+          .eq('agency', agency).eq('mes', mes).eq('campo', campo);
+      } else {
+        await _supaClient.from('overrides_agencia').upsert({
+          agency, mes, campo, valor: Number(valor),
+          atualizado_em: new Date().toISOString()
+        }, { onConflict: 'agency,mes,campo' });
+      }
+    } catch(e) { console.warn('[DB] erro override agencia:', e); }
+  }
+
+  // Salva override regional na tabela overrides_regional
+  async function _dbSalvarOverrideRegional(mes, campo, valor) {
+    if (!_supaClient) return;
+    try {
+      if (valor === null || valor === undefined) {
+        await _supaClient.from('overrides_regional').delete()
+          .eq('mes', mes).eq('campo', campo);
+      } else {
+        await _supaClient.from('overrides_regional').upsert({
+          mes, campo, valor: Number(valor),
+          atualizado_em: new Date().toISOString()
+        }, { onConflict: 'mes,campo' });
+      }
+    } catch(e) { console.warn('[DB] erro override regional:', e); }
+  }
+
+  // Salva gerente na tabela gerentes_ag
+  async function _dbSalvarGerente(agencia, nome) {
+    if (!_supaClient) return;
+    try {
+      await _supaClient.from('gerentes_ag').upsert(
+        { agencia, nome, atualizado_em: new Date().toISOString() },
+        { onConflict: 'agencia,nome' }
+      );
+    } catch(e) { console.warn('[DB] erro salvar gerente:', e); }
+  }
+
+  // Remove gerente da tabela gerentes_ag
+  async function _dbRemoverGerente(agencia, nome) {
+    if (!_supaClient) return;
+    try {
+      await _supaClient.from('gerentes_ag').delete()
+        .eq('agencia', agencia).eq('nome', nome);
+    } catch(e) { console.warn('[DB] erro remover gerente:', e); }
+  }
+
+  // Carrega TODAS as tabelas novas e popula o localStorage
+  async function _carregarNovasTabelas() {
+    if (!_supaClient) return;
+    try {
+      // 1. Lançamentos diários → STORE_KEY
+      const { data: lancs } = await _supaClient.from('lancamentos_diarios').select('*');
+      if (lancs && lancs.length) {
+        const local = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+        // Converte formato banco → formato app
+        const doBanco = lancs.map(r => ({
+          agency:           r.agency,
+          date:             r.date,
+          prodDesconto:     Number(r.prod_desconto)    || 0,
+          antDemais:        Number(r.ant_demais)       || 0,
+          longoPrazo:       Number(r.longo_prazo)      || 0,
+          arvDia:           Number(r.arv_dia)          || 0,
+          liquidacaoTotal:  Number(r.liquidacao_total) || 0,
+          vopDia:           Number(r.vop_dia)          || 0,
+          netDia:           Number(r.net_dia)          || 0,
+        }));
+        const merged = _mergeArrayPorChave(local, doBanco, ['agency', 'date']);
+        _supaSyncing = true;
+        try { localStorage.setItem(STORE_KEY, JSON.stringify(merged)); } finally { _supaSyncing = false; }
+      }
+
+      // 2. Saldos iniciais → SALDOS_KEY
+      const { data: saldos } = await _supaClient.from('saldos_iniciais').select('*');
+      if (saldos && saldos.length) {
+        let store = {};
+        try { store = JSON.parse(localStorage.getItem(SALDOS_KEY) || '{}'); } catch(_) {}
+        store = _migrarSaldosSeNecessario(store);
+        saldos.forEach(r => {
+          if (!store[r.mes]) store[r.mes] = {};
+          // Só sobrescreve se não tem dados locais (banco é fonte de verdade para saldos)
+          if (!store[r.mes][r.agency]) {
+            store[r.mes][r.agency] = {
+              metaVopInicial: Number(r.meta_vop)       || 0,
+              descInicial:    Number(r.desc_inicial)   || 0,
+              quenteInicial:  Number(r.quente_inicial) || 0,
+              arvInicial:     Number(r.arv_inicial)    || 0,
+              liqInicial:     Number(r.liq_inicial)    || 0,
+              mornoInicial:   Number(r.morno_inicial)  || 0,
+              netProjMes:     Number(r.net_proj_mes)   || 0,
+            };
+          }
+        });
+        _supaSyncing = true;
+        try { localStorage.setItem(SALDOS_KEY, JSON.stringify(store)); } finally { _supaSyncing = false; }
+      }
+
+      // 3. Gerentes → GER_KEY
+      const { data: gerentes } = await _supaClient.from('gerentes_ag').select('*');
+      if (gerentes && gerentes.length) {
+        const lista = gerentes.map(r => ({ agencia: r.agencia, nome: r.nome }));
+        _supaSyncing = true;
+        try { localStorage.setItem(GER_KEY, JSON.stringify(lista)); } finally { _supaSyncing = false; }
+      }
+
+      // 4. Overrides agência → VG_AG_OVR_KEY
+      const { data: ovrsAg } = await _supaClient.from('overrides_agencia').select('*');
+      if (ovrsAg && ovrsAg.length) {
+        const ovrAll = {};
+        ovrsAg.forEach(r => {
+          if (!ovrAll[r.mes]) ovrAll[r.mes] = {};
+          if (!ovrAll[r.mes][r.agency]) ovrAll[r.mes][r.agency] = {};
+          ovrAll[r.mes][r.agency][r.campo] = r.valor;
+        });
+        _supaSyncing = true;
+        try { localStorage.setItem(VG_AG_OVR_KEY, JSON.stringify(ovrAll)); } finally { _supaSyncing = false; }
+      }
+
+      // 5. Overrides regional → VG_CONS_KEY
+      const { data: ovrsReg } = await _supaClient.from('overrides_regional').select('*');
+      if (ovrsReg && ovrsReg.length) {
+        const regAll = {};
+        ovrsReg.forEach(r => {
+          if (!regAll[r.mes]) regAll[r.mes] = {};
+          regAll[r.mes][r.campo] = r.valor;
+        });
+        _supaSyncing = true;
+        try { localStorage.setItem(VG_CONS_KEY, JSON.stringify(regAll)); } finally { _supaSyncing = false; }
+      }
+
+    } catch(e) { console.warn('[DB] erro carregar tabelas:', e); }
+  }
+
   async function sincronizarDoSupabase() {
     if (!_supaClient) return;
     try {
-      await Promise.all(SUPA_KEYS.map(k => _baixarChave(k)));
+      // Carrega das novas tabelas (fonte primária)
+      await _carregarNovasTabelas();
+      // Carrega também as chaves legado (app_storage) para compatibilidade
+      await Promise.all([PROD_KEY, 'lancamentos_arquivados'].map(k => _baixarChave(k)));
       _atualizarStatusSupa('🟢 Online', 'sync');
     } catch(e) { console.warn('Sync Supabase erro:', e); }
   }
@@ -2453,6 +2649,8 @@
     row.vopDia = (Number(row.prodDesconto)||0) + (Number(row.antDemais)||0) + (Number(row.longoPrazo)||0) + (Number(row.arvDia)||0);
     row.netDia = row.vopDia + (Number(row.liquidacaoTotal)||0);
     localStorage.setItem(STORE_KEY, JSON.stringify(store));
+    // Salva também na nova tabela
+    _dbSalvarLancamento(row);
     // NÃO re-renderiza aqui — perde o foco. Use botão "💾 Salvar e atualizar".
     _vgMarcarPendente();
   }
@@ -2613,6 +2811,8 @@
       all[mes][campo] = v;
     }
     localStorage.setItem(VG_CONS_KEY, JSON.stringify(all));
+    // Salva também na nova tabela
+    _dbSalvarOverrideRegional(mes, campo, v);
     // NÃO re-renderiza aqui — perde o foco. Use botão "💾 Salvar e atualizar".
     _vgMarcarPendente();
   }
@@ -2649,6 +2849,8 @@
       acao = 'salvo: ' + fmtBRL(v);
     }
     localStorage.setItem(VG_AG_OVR_KEY, JSON.stringify(all));
+    // Salva também na nova tabela
+    _dbSalvarOverrideAgencia(agency, mes, campo, v);
     // Toast visível confirmando que SALVOU (resolve dúvida do usuário se foi gravado)
     showToast('💾 ' + agency + ' / ' + campo + ' ' + acao);
     _vgMarcarPendente();
@@ -2673,6 +2875,8 @@
       acao = 'salvo: ' + fmtBRL(-num);
     }
     localStorage.setItem(VG_AG_OVR_KEY, JSON.stringify(all));
+    // Salva também na nova tabela
+    _dbSalvarOverrideAgencia(agency, mes, 'liqTotal', valor === '' || valor === null || valor === undefined ? null : -Math.abs(Number(valor)||0));
     showToast('💾 ' + agency + ' / Liq Total ' + acao);
     _vgMarcarPendente();
   }
@@ -3475,6 +3679,70 @@
       console.error('vgLimparTudoAbrir erro:', err);
     }
   }
+
+  // ── Backup manual: download JSON + salva no banco ──────────────────────
+  async function vgBaixarBackup() {
+    const btn = document.querySelector('[onclick="vgBaixarBackup()"]');
+    if (btn) { btn.textContent = '⏳ Gerando...'; btn.disabled = true; }
+    try {
+      const agora = new Date();
+      const ts = agora.toISOString().replace(/[:.]/g, '-');
+      const dataFmt = agora.toLocaleDateString('pt-BR') + ' ' + agora.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+
+      // Coleta todos os dados atuais
+      const dados = {
+        geradoEm:           agora.toISOString(),
+        versao:             '2.0',
+        lancamentos_diarios: JSON.parse(localStorage.getItem(STORE_KEY)       || '[]'),
+        saldos_iniciais:     JSON.parse(localStorage.getItem(SALDOS_KEY)      || '{}'),
+        gerentes:            JSON.parse(localStorage.getItem(GER_KEY)         || '[]'),
+        overrides_agencia:   JSON.parse(localStorage.getItem(VG_AG_OVR_KEY)   || '{}'),
+        overrides_regional:  JSON.parse(localStorage.getItem(VG_CONS_KEY)     || '{}'),
+        prod_gerente:        JSON.parse(localStorage.getItem(PROD_KEY)        || '[]'),
+        arquivados:          JSON.parse(localStorage.getItem(VG_BACKUP_KEY)   || '{}'),
+      };
+
+      const totalLanc = dados.lancamentos_diarios.length;
+      const nome = 'backup_agencias_' + ts + '.json';
+
+      // 1. Download do arquivo JSON
+      const blob = new Blob([JSON.stringify(dados, null, 2)], { type: 'application/json' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = nome;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      // 2. Salva no banco (tabela backups)
+      if (_supaClient) {
+        try {
+          await _supaClient.from('backups').insert({
+            nome,
+            mes:               'TODOS',
+            tipo:              'manual',
+            dados:             dados,
+            total_lancamentos: totalLanc,
+            criado_em:         agora.toISOString()
+          });
+          showToast('⬇️ Backup baixado e salvo no banco! (' + totalLanc + ' lançamentos)');
+        } catch(e) {
+          console.warn('[Backup] erro ao salvar no banco:', e);
+          showToast('⬇️ Backup baixado localmente! (banco offline)');
+        }
+      } else {
+        showToast('⬇️ Backup baixado! (sem conexão com banco)');
+      }
+    } catch(err) {
+      showToast('❌ Erro ao gerar backup: ' + err.message, true);
+      console.error('vgBaixarBackup erro:', err);
+    } finally {
+      if (btn) { btn.textContent = '⬇️ Baixar backup'; btn.disabled = false; }
+    }
+  }
+  window.vgBaixarBackup = vgBaixarBackup;
 
   function vgRestaurarBackupAbrir() {
     let backups = {};
@@ -5166,6 +5434,8 @@
     if (!store[mes]) store[mes] = {};
     store[mes][agency] = saldos;
     localStorage.setItem(SALDOS_KEY, JSON.stringify(store));
+    // Salva também na nova tabela
+    _dbSalvarSaldo(agency, mes, saldos);
   }
 
   // Carrega saldos mensais salvos para pré-preencher campos de cima
@@ -5247,10 +5517,11 @@
 
   function salvarLocal(payload) {
     let store = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
-    // Remove lançamento anterior da mesma agência na mesma data
     store = store.filter(r => !(r.agency === payload.agency && r.date === payload.date));
     store.push(payload);
     localStorage.setItem(STORE_KEY, JSON.stringify(store));
+    // Salva também na nova tabela (estrutura correta, sem risco de sobrescrita)
+    _dbSalvarLancamento(payload);
   }
 
   function carregarLocal(date) {
