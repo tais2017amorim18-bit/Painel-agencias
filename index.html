@@ -638,30 +638,35 @@
 
   <!-- Quadro Mensal acumulado até a data selecionada -->
   <div class="card">
-    <div class="card-title" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <span>📅 Quadro Mensal — Acumulado do mês até a data</span>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <span style="font-weight:700;color:#1a3a6e;font-size:14px">📅 Quadro Mensal — Acumulado do mês até a data</span>
       <span class="pill pill-blue" id="vg-mes-label">—</span>
-      <button id="vg-senha-btn" class="btn btn-secondary btn-sm" onclick="vgPedirSenhaQuadroMensal()" style="margin-left:auto;font-size:11px;color:#1a3a6e;border-color:#1a3a6e" title="Liberar edição com senha">🔒 Desbloquear edição</button>
-      <button id="vg-mensal-edit-btn" onclick="vgMensalToggleEdicaoGlobal()" style="display:none">_</button>
-      <button class="btn btn-primary btn-sm" onclick="vgSalvarEAtualizar()" style="font-size:11px;background:#0d7a5f;border-color:#0d7a5f" title="Salva os lançamentos digitados e atualiza os totais (Net Fechamento, linha Regional)">💾 Salvar e atualizar totais</button>
       <span id="vg-pendente-aviso" style="display:none;align-items:center;gap:4px;font-size:11px;color:#a23026;font-weight:600;background:#fff5f5;padding:3px 8px;border-radius:4px;border:1px solid #f0c0c0">⚠️ Há alterações não atualizadas</span>
-      <button class="btn btn-primary btn-sm" onclick="vgAbrirSaldosIniciais()" style="font-size:11px;background:#0d6e56;border-color:#0d6e56" title="Informa/edita os saldos iniciais (Desc, Quente, ARV) que servem de base para a dedução automática">📋 Saldos Iniciais</button>
-      <button class="btn btn-secondary btn-sm" onclick="vgDiagnosticarLiq()" style="font-size:11px;color:#e67e22;border-color:#e67e22" title="Diagnóstico: ver por que a Liquidação Total não está deduzindo do esperado">🔍 Diagnóstico Liq</button>
-      <button class="btn btn-secondary btn-sm" onclick="vgResetarOverridesAgencia()" style="font-size:11px;color:#1a3a6e;border-color:#1a3a6e" title="Apaga TODOS os valores manuais de uma agência (volta ao cálculo automático)">🔄 Resetar overrides (1 agência)</button>
-      <button class="btn btn-secondary btn-sm" onclick="vgApagarTodosOverridesMes()" style="font-size:11px;color:#fff;background:#a23026;border-color:#a23026" title="EMERGÊNCIA: apaga TODOS os valores manuais do mês inteiro (todas as 12 agências) - usa quando dedução automática não está funcionando">☢️ Apagar overrides do mês inteiro</button>
-      <button class="btn btn-secondary btn-sm" onclick="vgLimparMesAbrir()" style="font-size:11px;color:#a23026;border-color:#a23026" title="Apaga TUDO do mês selecionado: lançamentos diários, saldos iniciais, overrides">🗑️ Limpar mês inteiro</button>
-      <button class="btn btn-secondary btn-sm" onclick="vgLimparAgenciaAbrir()" style="font-size:11px;color:#a23026;border-color:#a23026" title="Apaga apenas os dados de uma agência específica no mês selecionado">🗑️ Limpar agência</button>
-      <button class="btn btn-secondary btn-sm" onclick="vgLimparTudoAbrir()" style="font-size:11px;color:#fff;background:#a23026;border-color:#a23026" title="APAGA TUDO de TODAS as agências em TODOS os meses">🧹 Limpar TUDO</button>
-      <button class="btn btn-secondary btn-sm" onclick="vgRestaurarBackupAbrir()" style="font-size:11px" title="Recuperar lançamentos arquivados de um mês anterior">↩️ Recuperar backup</button>
-      <button class="btn btn-primary btn-sm" onclick="vgBaixarBackup()" style="font-size:11px;background:#1a3a6e;border-color:#1a3a6e" title="Baixa um arquivo JSON com todos os dados do painel + salva no banco">⬇️ Baixar backup</button>
-      <span id="vg-mensal-edit-status" style="font-size:11px;color:#a23026;font-weight:600;display:none">⚠️ Modo edição ATIVO — todas as agências editáveis</span>
+      <span id="vg-mensal-edit-status" style="font-size:11px;color:#a23026;font-weight:600;display:none">⚠️ Modo edição ATIVO</span>
+      <button id="vg-mensal-edit-btn" onclick="vgMensalToggleEdicaoGlobal()" style="display:none">_</button>
+
+      <!-- Grupo principal -->
+      <div style="display:flex;gap:6px;margin-left:auto;flex-wrap:wrap;align-items:center">
+        <button id="vg-senha-btn" class="btn btn-secondary btn-sm" onclick="vgPedirSenhaQuadroMensal()" style="font-size:11px;color:#1a3a6e;border-color:#1a3a6e">🔒 Desbloquear edição</button>
+        <button class="btn btn-primary btn-sm" onclick="vgSalvarEAtualizar()" style="font-size:11px;background:#0d7a5f;border-color:#0d7a5f">💾 Salvar totais</button>
+        <button class="btn btn-primary btn-sm" onclick="vgAbrirSaldosIniciais()" style="font-size:11px;background:#0d6e56;border-color:#0d6e56">📋 Saldos Iniciais</button>
+        <button class="btn btn-secondary btn-sm" onclick="vgDiagnosticarLiq()" style="font-size:11px;color:#e67e22;border-color:#e67e22">🔍 Diagnóstico</button>
+      </div>
+
+      <!-- Grupo de manutenção -->
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <span style="font-size:10px;color:#999;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Manutenção:</span>
+        <button class="btn btn-secondary btn-sm" onclick="vgLimparMesAbrir()" style="font-size:11px;color:#a23026;border-color:#a23026" title="Apaga TUDO do mês selecionado">🗑️ Limpar mês</button>
+        <button class="btn btn-secondary btn-sm" onclick="vgLimparAgenciaAbrir()" style="font-size:11px;color:#a23026;border-color:#a23026" title="Apaga dados de uma agência">🗑️ Limpar agência</button>
+        <button class="btn btn-secondary btn-sm" onclick="vgRestaurarBackupAbrir()" style="font-size:11px" title="Recuperar backup anterior">↩️ Restaurar</button>
+        <button class="btn btn-primary btn-sm" onclick="vgBaixarBackup()" style="font-size:11px;background:#1a3a6e;border-color:#1a3a6e">⬇️ Backup</button>
+      </div>
     </div>
     <div class="formula-box">
       <span class="tag soma">ACUMULA</span> Realizado VOP = Σ (Desc+Ant+LP+ARV) do mês &nbsp;|&nbsp; Liq Total = Σ Liq do mês &nbsp;|&nbsp; Net Atual = Σ Net Dia<br>
       <span class="tag sub">DEDUZ</span> Saldos = Inicial − soma diária do mês &nbsp;|&nbsp;
       <span class="tag igual">NET FECHAMENTO</span> = Sd.Desc + Sd.Quente + Sd.ARV + Sd.Liq + Net Atual<br>
-      <span style="background:#fff8e1;padding:2px 6px;border-radius:3px;color:#666;font-size:10px">💡 Após desbloquear: digite valor + <strong>Enter</strong> ou <strong>TAB</strong> para salvar &nbsp;|&nbsp; <strong>0️⃣</strong> = força zero &nbsp;|&nbsp; <strong>🗑</strong> = volta ao cálculo automático</span><br>
-      <span style="background:#fde8e8;padding:2px 6px;border-radius:3px;color:#a23026;font-size:10px;margin-top:4px;display:inline-block">⚠️ <strong>Não está deduzindo da Prod.Diária?</strong> Provável causa: você editou manualmente alguma coluna e isso travou o cálculo. Use <strong>🔄 Resetar overrides</strong> ou <strong>☢️ Apagar overrides do mês</strong> para destravar.</span>
+      <span style="background:#fff8e1;padding:2px 6px;border-radius:3px;color:#666;font-size:10px">💡 Após desbloquear: digite valor + <strong>Enter</strong> ou <strong>TAB</strong> para salvar &nbsp;|&nbsp; <strong>0️⃣</strong> = força zero &nbsp;|&nbsp; <strong>🗑</strong> = volta ao cálculo automático</span>
     </div>
     <div class="tbl-wrap">
       <table id="vg-tabela-mensal">
@@ -2730,8 +2735,10 @@
     // Recalcula vopDia e netDia
     row.vopDia = (Number(row.prodDesconto)||0) + (Number(row.antDemais)||0) + (Number(row.longoPrazo)||0) + (Number(row.arvDia)||0);
     row.netDia = row.vopDia + (Number(row.liquidacaoTotal)||0);
-    localStorage.setItem(STORE_KEY, JSON.stringify(store));
-    // Salva também na nova tabela
+    // Atualiza cache em memória imediatamente
+    _cache.lancamentos = _cache.lancamentos.filter(r => !(r.agency === agency && r.date === date));
+    _cache.lancamentos.push(row);
+    // Salva no banco
     _dbSalvarLancamento(row);
     // NÃO re-renderiza aqui — perde o foco. Use botão "💾 Salvar e atualizar".
     _vgMarcarPendente();
@@ -5618,13 +5625,11 @@
   }
 
   function salvarSaldosMensais(agency, saldos, mesParam) {
-    let store = JSON.parse(localStorage.getItem(SALDOS_KEY) || '{}');
-    store = _migrarSaldosSeNecessario(store);
     const mes = mesParam || mesAtualForm();
-    if (!store[mes]) store[mes] = {};
-    store[mes][agency] = saldos;
-    localStorage.setItem(SALDOS_KEY, JSON.stringify(store));
-    // Salva também na nova tabela
+    // Atualiza cache em memória imediatamente
+    if (!_cache.saldos[mes]) _cache.saldos[mes] = {};
+    _cache.saldos[mes][agency] = saldos;
+    // Salva no banco
     _dbSalvarSaldo(agency, mes, saldos);
   }
 
@@ -5706,11 +5711,10 @@
   }
 
   function salvarLocal(payload) {
-    let store = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
-    store = store.filter(r => !(r.agency === payload.agency && r.date === payload.date));
-    store.push(payload);
-    localStorage.setItem(STORE_KEY, JSON.stringify(store));
-    // Salva também na nova tabela (estrutura correta, sem risco de sobrescrita)
+    // Atualiza cache em memória imediatamente (sem esperar o sync de 30s)
+    _cache.lancamentos = _cache.lancamentos.filter(r => !(r.agency === payload.agency && r.date === payload.date));
+    _cache.lancamentos.push(payload);
+    // Salva no banco
     _dbSalvarLancamento(payload);
   }
 
