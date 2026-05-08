@@ -2534,13 +2534,32 @@
   }
 
   // Carrega TODAS as tabelas novas e popula o localStorage
-  async function _carregarNovasTabelas() {
+  async function _carregarNovasTabelas(mesParam) {
     if (!_supaClient) return;
     try {
-      // 1. Lançamentos diários → _cache.lancamentos (fonte primária: banco)
-      const { data: lancs } = await _supaClient.from('lancamentos_diarios').select('*');
+      const mes = mesParam || new Date().toISOString().slice(0, 7);
+      const primeiroDia = mes + '-01';
+
+      // Todas as queries em paralelo — muito mais rápido
+      const [
+        { data: lancs },
+        { data: saldos },
+        { data: gerentes },
+        { data: ovrsAg },
+        { data: ovrsReg }
+      ] = await Promise.all([
+        _supaClient.from('lancamentos_diarios').select('*').gte('date', primeiroDia),
+        _supaClient.from('saldos_iniciais').select('*').eq('mes', mes),
+        _supaClient.from('gerentes_ag').select('*'),
+        _supaClient.from('overrides_agencia').select('*').eq('mes', mes),
+        _supaClient.from('overrides_regional').select('*').eq('mes', mes),
+      ]);
+
+      // 1. Lançamentos → _cache.lancamentos
       if (lancs) {
-        _cache.lancamentos = lancs.map(r => ({
+        // Preserva lançamentos de outros meses já no cache
+        const outrosMeses = _cache.lancamentos.filter(r => !r.date || !r.date.startsWith(mes));
+        const doMes = lancs.map(r => ({
           agency:          r.agency,
           date:            r.date,
           prodDesconto:    Number(r.prod_desconto)    || 0,
@@ -2551,15 +2570,14 @@
           vopDia:          Number(r.vop_dia)          || 0,
           netDia:          Number(r.net_dia)          || 0,
         }));
+        _cache.lancamentos = [...outrosMeses, ...doMes];
       }
 
-      // 2. Saldos iniciais → _cache.saldos
-      const { data: saldos } = await _supaClient.from('saldos_iniciais').select('*');
+      // 2. Saldos → _cache.saldos
       if (saldos) {
-        const store = {};
+        if (!_cache.saldos[mes]) _cache.saldos[mes] = {};
         saldos.forEach(r => {
-          if (!store[r.mes]) store[r.mes] = {};
-          store[r.mes][r.agency] = {
+          _cache.saldos[mes][r.agency] = {
             metaVopInicial: Number(r.meta_vop)       || 0,
             descInicial:    Number(r.desc_inicial)   || 0,
             quenteInicial:  Number(r.quente_inicial) || 0,
@@ -2569,36 +2587,28 @@
             netProjMes:     Number(r.net_proj_mes)   || 0,
           };
         });
-        _cache.saldos = store;
       }
 
       // 3. Gerentes → _cache.gerentes
-      const { data: gerentes } = await _supaClient.from('gerentes_ag').select('*');
       if (gerentes) {
         _cache.gerentes = gerentes.map(r => ({ agencia: r.agencia, nome: r.nome }));
       }
 
       // 4. Overrides agência → _cache.ovrsAgencia
-      const { data: ovrsAg } = await _supaClient.from('overrides_agencia').select('*');
       if (ovrsAg) {
-        const ovrAll = {};
+        _cache.ovrsAgencia[mes] = {};
         ovrsAg.forEach(r => {
-          if (!ovrAll[r.mes]) ovrAll[r.mes] = {};
-          if (!ovrAll[r.mes][r.agency]) ovrAll[r.mes][r.agency] = {};
-          ovrAll[r.mes][r.agency][r.campo] = r.valor;
+          if (!_cache.ovrsAgencia[mes][r.agency]) _cache.ovrsAgencia[mes][r.agency] = {};
+          _cache.ovrsAgencia[mes][r.agency][r.campo] = r.valor;
         });
-        _cache.ovrsAgencia = ovrAll;
       }
 
       // 5. Overrides regional → _cache.ovrsRegional
-      const { data: ovrsReg } = await _supaClient.from('overrides_regional').select('*');
       if (ovrsReg) {
-        const regAll = {};
+        _cache.ovrsRegional[mes] = {};
         ovrsReg.forEach(r => {
-          if (!regAll[r.mes]) regAll[r.mes] = {};
-          regAll[r.mes][r.campo] = r.valor;
+          _cache.ovrsRegional[mes][r.campo] = r.valor;
         });
-        _cache.ovrsRegional = regAll;
       }
 
       _cache.carregado = true;
@@ -2607,13 +2617,21 @@
 
   async function sincronizarDoSupabase() {
     if (!_supaClient) return;
+    _atualizarStatusSupa('⏳ Carregando...', '');
     try {
-      // Carrega das novas tabelas (fonte primária)
-      await _carregarNovasTabelas();
-      // Carrega também as chaves legado (app_storage) para compatibilidade
-      await Promise.all([PROD_KEY, 'lancamentos_arquivados'].map(k => _baixarChave(k)));
+      // Carrega novas tabelas e legado em paralelo
+      await Promise.all([
+        _carregarNovasTabelas(),
+        Promise.all([PROD_KEY, 'lancamentos_arquivados'].map(k => _baixarChave(k)))
+      ]);
       _atualizarStatusSupa('🟢 Online', 'sync');
-    } catch(e) { console.warn('Sync Supabase erro:', e); }
+      // Renderiza imediatamente após ter os dados
+      if (typeof renderVisaoGeral === 'function') renderVisaoGeral();
+      atualizarDashTotal((document.getElementById('ref-date')||{value:today}).value||today);
+    } catch(e) {
+      _atualizarStatusSupa('🔴 Offline (local)', '');
+      console.warn('Sync Supabase erro:', e);
+    }
   }
 
   // Mantém compatibilidade — função antiga continua existindo, mas agora só dispara o setItem
@@ -4455,10 +4473,11 @@
 
   initSupabase();
   // Sync automático a cada 30s — carrega do banco, atualiza cache, re-renderiza
-  // Pula se usuário está digitando (evita perder foco)
+  // Pula se: usuário está digitando OU há linhas em edição abertas no Quadro Diário
   setInterval(async () => {
     const ativo = document.activeElement;
     if (ativo && (ativo.tagName === 'INPUT' || ativo.tagName === 'TEXTAREA' || ativo.tagName === 'SELECT')) return;
+    if (_vgLinhasEmEdicao && _vgLinhasEmEdicao.size > 0) return; // linha em edição — não sobrescreve
     if (!_supaClient) return;
     await _carregarNovasTabelas();
     atualizarDashTotal((document.getElementById('ref-date')||{value:today}).value||today);
