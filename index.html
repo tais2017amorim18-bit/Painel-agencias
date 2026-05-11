@@ -889,24 +889,31 @@
   <!-- ══ Análise por Produto ══ -->
   <div class="card" style="border:2px solid #0d6e56;background:linear-gradient(135deg,#f0faf7 0%,#e6f4ef 100%)">
     <div class="card-title" style="color:#0d6e56">📊 Análise por Produto — Acumulado do Mês</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px" id="analise-produto-grid">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px" id="analise-produto-grid">
       <div>
         <div style="font-weight:700;font-size:12px;color:#1a3a6e;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #1a3a6e">
-          📈 Maior LP + ARV por Agência
-          <div style="font-weight:400;font-size:10px;color:#666;margin-top:2px">Quem mais produz longo prazo e ARV</div>
+          📈 Maior Longo Prazo
+          <div style="font-weight:400;font-size:10px;color:#666;margin-top:2px">Quem mais produz longo prazo</div>
         </div>
-        <div id="rank-lp-arv"></div>
+        <div id="rank-lp"></div>
+      </div>
+      <div>
+        <div style="font-weight:700;font-size:12px;color:#0d6e56;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #0d6e56">
+          🏹 Maior ARV
+          <div style="font-weight:400;font-size:10px;color:#666;margin-top:2px">Quem mais produz ARV</div>
+        </div>
+        <div id="rank-arv"></div>
       </div>
       <div>
         <div style="font-weight:700;font-size:12px;color:#a23026;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #a23026">
-          ⚠️ Menor Curto Prazo por Agência
-          <div style="font-weight:400;font-size:10px;color:#666;margin-top:2px">Quem menos vende Prod. Desconto</div>
+          ⚠️ Menor Longo Prazo
+          <div style="font-weight:400;font-size:10px;color:#666;margin-top:2px">Quem menos produz longo prazo</div>
         </div>
-        <div id="rank-curto-prazo"></div>
+        <div id="rank-menor-lp"></div>
       </div>
       <div>
         <div style="font-weight:700;font-size:12px;color:#e67e22;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #e67e22">
-          🏹 VOP concentrado em ARV
+          🔶 VOP concentrado em ARV
           <div style="font-weight:400;font-size:10px;color:#666;margin-top:2px">ARV representa mais de 70% do VOP</div>
         </div>
         <div id="rank-arv-concentrado"></div>
@@ -5832,54 +5839,63 @@
     const porAg = {};
     lancs.forEach(r => {
       if (!porAg[r.agency]) porAg[r.agency] = { lp:0, arv:0, desc:0, vop:0 };
-      porAg[r.agency].lp   += Number(r.longoPrazo)   || 0;
-      porAg[r.agency].arv  += Number(r.arvDia)        || 0;
-      porAg[r.agency].desc += Number(r.prodDesconto)  || 0;
-      porAg[r.agency].vop  += Number(r.vopDia)        || 0;
+      porAg[r.agency].lp   += Number(r.longoPrazo)  || 0;
+      porAg[r.agency].arv  += Number(r.arvDia)       || 0;
+      porAg[r.agency].desc += Number(r.prodDesconto) || 0;
+      porAg[r.agency].vop  += Number(r.vopDia)       || 0;
     });
 
     const fmt = v => 'R$ ' + (v/1e6).toFixed(1) + 'M';
-    const pct = (a,b) => b > 0 ? Math.round(a/b*100) + '%' : '—';
-
     const ags = Object.keys(porAg);
+    const semDados = '<div style="color:#999;font-size:12px;padding:8px 0">Sem lançamentos no mês</div>';
 
-    // 1. Maior LP + ARV
-    const rankLpArv = [...ags].sort((a,b) => (porAg[b].lp+porAg[b].arv) - (porAg[a].lp+porAg[a].arv));
-    const elLpArv = document.getElementById('rank-lp-arv');
-    if (elLpArv) elLpArv.innerHTML = rankLpArv.length ? rankLpArv.map((ag, i) => {
-      const total = porAg[ag].lp + porAg[ag].arv;
+    // 1. Maior Longo Prazo
+    const rankLp = [...ags].sort((a,b) => porAg[b].lp - porAg[a].lp);
+    const elLp = document.getElementById('rank-lp');
+    if (elLp) elLp.innerHTML = rankLp.length ? rankLp.map((ag, i) => {
       const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
-      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #e8f0eb;font-size:12px">
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #e8eef8;font-size:12px">
         <span>${medal} ${ag}</span>
-        <span style="font-weight:600;color:#0d6e56">${fmt(total)}</span>
+        <span style="font-weight:600;color:#1a3a6e">${fmt(porAg[ag].lp)}</span>
       </div>`;
-    }).join('') : '<div style="color:#999;font-size:12px;padding:8px 0">Sem lançamentos no mês</div>';
+    }).join('') : semDados;
 
-    // 2. Menor Curto Prazo (Prod. Desconto)
-    const rankCurto = [...ags].sort((a,b) => porAg[a].desc - porAg[b].desc);
-    const elCurto = document.getElementById('rank-curto-prazo');
-    if (elCurto) elCurto.innerHTML = rankCurto.length ? rankCurto.map((ag, i) => {
-      const cor = i < 3 ? '#a23026' : '#444';
+    // 2. Maior ARV
+    const rankArv = [...ags].sort((a,b) => porAg[b].arv - porAg[a].arv);
+    const elArv = document.getElementById('rank-arv');
+    if (elArv) elArv.innerHTML = rankArv.length ? rankArv.map((ag, i) => {
+      const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #e6f4ef;font-size:12px">
+        <span>${medal} ${ag}</span>
+        <span style="font-weight:600;color:#0d6e56">${fmt(porAg[ag].arv)}</span>
+      </div>`;
+    }).join('') : semDados;
+
+    // 3. Menor Longo Prazo
+    const rankMenorLp = [...ags].sort((a,b) => porAg[a].lp - porAg[b].lp);
+    const elMenorLp = document.getElementById('rank-menor-lp');
+    if (elMenorLp) elMenorLp.innerHTML = rankMenorLp.length ? rankMenorLp.map((ag, i) => {
       const icone = i===0?'🔴':i===1?'🟠':i===2?'🟡':'';
+      const cor = i < 3 ? '#a23026' : '#444';
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #fde8e8;font-size:12px">
         <span>${icone} ${ag}</span>
-        <span style="font-weight:600;color:${cor}">${fmt(porAg[ag].desc)}</span>
+        <span style="font-weight:600;color:${cor}">${fmt(porAg[ag].lp)}</span>
       </div>`;
-    }).join('') : '<div style="color:#999;font-size:12px;padding:8px 0">Sem lançamentos no mês</div>';
+    }).join('') : semDados;
 
-    // 3. VOP concentrado em ARV (>70%)
-    const rankArv = [...ags]
-      .map(ag => ({ ag, pctArv: porAg[ag].vop > 0 ? porAg[ag].arv/porAg[ag].vop : 0 }))
-      .sort((a,b) => b.pctArv - a.pctArv);
-    const elArv = document.getElementById('rank-arv-concentrado');
-    if (elArv) elArv.innerHTML = rankArv.length ? rankArv.map(({ag, pctArv}) => {
-      const cor = pctArv >= 0.7 ? '#e67e22' : '#444';
-      const alerta = pctArv >= 0.7 ? '⚠️ ' : '';
+    // 4. VOP concentrado em ARV (>70%)
+    const rankArvConc = [...ags]
+      .map(ag => ({ ag, pct: porAg[ag].vop > 0 ? porAg[ag].arv/porAg[ag].vop : 0 }))
+      .sort((a,b) => b.pct - a.pct);
+    const elArvConc = document.getElementById('rank-arv-concentrado');
+    if (elArvConc) elArvConc.innerHTML = rankArvConc.length ? rankArvConc.map(({ag, pct}) => {
+      const cor = pct >= 0.7 ? '#e67e22' : '#444';
+      const alerta = pct >= 0.7 ? '⚠️ ' : '';
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #fef3e8;font-size:12px">
         <span>${alerta}${ag}</span>
-        <span style="font-weight:600;color:${cor}">${Math.round(pctArv*100)}% ARV</span>
+        <span style="font-weight:600;color:${cor}">${Math.round(pct*100)}% ARV</span>
       </div>`;
-    }).join('') : '<div style="color:#999;font-size:12px;padding:8px 0">Sem lançamentos no mês</div>';
+    }).join('') : semDados;
   }
 
   function renderConsolidadoRegional() {
