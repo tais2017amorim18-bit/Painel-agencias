@@ -873,18 +873,8 @@
   </div>
 
   <!-- Quartis Regional -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-
-    <!-- Quartil Gerentes -->
-    <div class="card" style="margin-bottom:0">
-      <div class="card-title">📊 Quartil Gerentes
-        <span class="pill pill-blue">Q1&gt;25M | Q2&gt;19M | Q3&gt;13M</span>
-      </div>
-      <div id="quartil-ger-bars" style="display:flex;align-items:flex-end;justify-content:center;gap:20px;height:90px;margin:10px 0 6px"></div>
-      <div id="quartil-ger-table"></div>
-    </div>
-
-    <!-- Quartil Agências -->
+  <!-- Quartil Agências apenas -->
+  <div style="margin-bottom:12px">
     <div class="card" style="margin-bottom:0">
       <div class="card-title">📊 Quartil Agências
         <span class="pill pill-green">Q1&gt;50M | Q2&gt;39M | Q3&gt;24M</span>
@@ -894,22 +884,7 @@
     </div>
   </div>
 
-  <!-- Ranking de Gerentes -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
 
-    <!-- Top Gerentes por VOP -->
-    <div class="card" style="margin-bottom:0">
-      <div class="card-title">🏆 Top Gerentes — VOP Acumulado</div>
-      <div id="rank-top-vop"></div>
-    </div>
-
-    <!-- Piores Gerentes -->
-    <div class="card" style="margin-bottom:0">
-      <div class="card-title">⚠️ Atenção — Menor VOP</div>
-      <div id="rank-bot-vop"></div>
-    </div>
-
-  </div>
 
   <!-- Painel Mensal -->
   <div class="card" style="display:none">
@@ -943,7 +918,7 @@
   </div>
 
   <!-- ══ NOVO: Consolidado Acumulado por Agência (com Quartil + Troféu) ══ -->
-  <div class="card" style="border:2px solid #1a3a6e;background:linear-gradient(135deg,#fafbff 0%,#eef3fb 100%)">
+  <div class="card" style="display:none;border:2px solid #1a3a6e;background:linear-gradient(135deg,#fafbff 0%,#eef3fb 100%)">
     <div class="card-title" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span>🏆 Consolidado Acumulado por Agência — Mês</span>
       <span class="pill pill-blue">VOP somado de todos os dias</span>
