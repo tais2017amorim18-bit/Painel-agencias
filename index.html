@@ -5729,13 +5729,27 @@
   ];
 
   function montarPainelLocal(date) {
-    // Lê do cache em memória (fonte de verdade — banco de dados)
-    const storeRows = (_cache.lancamentos || []).filter(r => r.date === date);
+    // Lê do cache em memória — acumulado do mês inteiro
+    const mes = date.slice(0, 7); // YYYY-MM
+    const storeRows = (_cache.lancamentos || []).filter(r => r.date && r.date.startsWith(mes));
 
-    // Um registro por agência (último enviado)
+    // Acumula todos os lançamentos do mês por agência
     const byAgency = {};
     storeRows.forEach(r => {
-      byAgency[r.agency] = r; // sobrescreve — pega o mais recente
+      if (!byAgency[r.agency]) {
+        byAgency[r.agency] = {
+          agency: r.agency, date: r.date,
+          prodDesconto: 0, antDemais: 0, longoPrazo: 0,
+          arvDia: 0, liquidacaoTotal: 0, vopDia: 0, netDia: 0
+        };
+      }
+      byAgency[r.agency].prodDesconto    += Number(r.prodDesconto)    || 0;
+      byAgency[r.agency].antDemais       += Number(r.antDemais)       || 0;
+      byAgency[r.agency].longoPrazo      += Number(r.longoPrazo)      || 0;
+      byAgency[r.agency].arvDia          += Number(r.arvDia)          || 0;
+      byAgency[r.agency].liquidacaoTotal += Number(r.liquidacaoTotal) || 0;
+      byAgency[r.agency].vopDia          += Number(r.vopDia)          || 0;
+      byAgency[r.agency].netDia          += Number(r.netDia)          || 0;
     });
 
     const zero = {
@@ -5747,8 +5761,7 @@
     const agencias = AGENCIAS_LIST.map(ag => {
       if (byAgency[ag]) {
         const r = byAgency[ag];
-        const netDiaAnt = Number(r.netDiaAnterior) || 0;
-        return { ...r, agency: ag, netAcumulado: netDiaAnt + (Number(r.netDia)||0), enviado: true };
+        return { ...r, agency: ag, netAcumulado: Number(r.netDia)||0, enviado: true };
       }
       return { ...zero, agency: ag, enviado: false };
     });
