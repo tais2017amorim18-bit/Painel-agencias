@@ -980,10 +980,12 @@
             <th class="th-meta">Meta VOP</th>
             <th class="th-ag">% Meta</th>
             <th class="th-ag">Dias</th>
+            <th class="th-day" style="background:#2d5a27">Morno Gestão</th>
+            <th class="th-net" style="background:#1a4a16">Net Gerencial</th>
           </tr>
         </thead>
         <tbody id="tbody-consol-ag">
-          <tr><td colspan="9" style="text-align:center;color:#aaa;padding:14px">Carregando...</td></tr>
+          <tr><td colspan="11" style="text-align:center;color:#aaa;padding:14px">Carregando...</td></tr>
         </tbody>
       </table>
     </div>
@@ -4307,21 +4309,21 @@
         + '<td>' + _vgInputMensalCell(ag, 'netProjMes', acum.netProjMes, agUser, mes) + '</td>'
         + '<td>' + _vgInputMensalCell(ag, 'mornoInicial', acum.mornoIni, agUser, mes) + '</td>'
         + _cellSaldo('netFechamento', valNetFech, 'net-acum', ovrNetFech !== null)
-        + (function() {
-            const mgData = _mornoGestaoCarregar();
-            const mgVal = (mgData[mes] && mgData[mes][ag] !== undefined) ? mgData[mes][ag] : '';
-            const mgNum = mgVal !== '' ? Number(mgVal) : 0;
-            const netGer = valNetFech + mgNum;
-            const agEsc = ag;
-            return '<td style="padding:2px 4px;text-align:right">'
-              + '<input type="number" value="' + (mgVal !== '' ? mgVal : '') + '" placeholder="0"'
-              + ' style="width:80px;padding:3px 5px;border:1px solid #4a8a44;border-radius:3px;font-size:11px;text-align:right;background:#f0fff0"'
-              + ' data-ag="' + agEsc + '" data-mes="' + mes + '"'
-              + ' onblur="var e=this;_mornoGestaoSalvar(e.dataset.ag,e.dataset.mes,e.value)"'
-              + ' onkeydown="if(event.key==String.fromCharCode(13)||event.key==String.fromCharCode(9)){var e=this;_mornoGestaoSalvar(e.dataset.ag,e.dataset.mes,e.value)}">'
-              + '</td>'
+        + (function(){
+            try {
+              var _mgData = _mornoGestaoCarregar();
+              var _mgVal = (_mgData[mes] && _mgData[mes][ag] !== undefined) ? _mgData[mes][ag] : "";
+              var _mgNum = _mgVal !== "" ? Number(_mgVal) : 0;
+              var _netGer = valNetFech + _mgNum;
+              return '<td style="padding:2px 4px;text-align:right;border-bottom:1px solid #eee">'
+                + '<input type="number" value="' + _mgVal + '" placeholder="0"'
+                + ' style="width:80px;padding:3px 5px;border:1px solid #4a8a44;border-radius:3px;font-size:11px;text-align:right;background:#f0fff0"'
+                + ' data-ag="' + ag + '" data-mes="' + mes + '"'
+                + ' onblur="var e=this;_mornoGestaoSalvar(e.dataset.ag,e.dataset.mes,e.value)">'
+                + '</td>'
+                + '<td class="net-acum ' + cls(_netGer) + '" style="background:#1a4a16;color:#fff">' + fmtBRL(_netGer) + '</td>';
+            } catch(e) { return '<td>—</td><td>—</td>'; }
           })()
-        + '</tr>';
     });
     // Linha Regional (continua só leitura — totais somados na mesma ordem)
     htmlM += '<tr style="background:#fff8e1;font-weight:700;border-top:2px solid #1a3a6e">'
@@ -6495,6 +6497,9 @@
     let rows = linhas.map(l => {
       const npCls = l.netProj >= 0 ? 'pos' : 'neg';
       const pctCor = l.pctMeta >= 100 ? '#0d7a5f' : l.pctMeta >= 70 ? '#e67e22' : '#b92d2d';
+      var _mgCons = _mornoGestaoCarregar();
+      var _mgConsVal = (_mgCons[mes] && _mgCons[mes][l.ag] !== undefined) ? Number(_mgCons[mes][l.ag]) : 0;
+      var _netGerCons = l.netProj + _mgConsVal;
       return '<tr>' +
         '<td class="ag left" style="white-space:nowrap"><span style="font-size:14px">' + l.trofeu + '</span> ' + l.ag + '</td>' +
         '<td class="auto-val ' + cls(l.vopAcum) + '">' + fmtBRL(l.vopAcum) + '</td>' +
@@ -6505,12 +6510,15 @@
         '<td>' + fmtBRL(l.meta) + '</td>' +
         '<td style="text-align:center;color:' + pctCor + ';font-weight:700">' + l.pctMeta.toFixed(0) + '%</td>' +
         '<td style="text-align:center;color:#888">' + l.dias + 'd</td>' +
+        '<td style="text-align:right;padding:2px 4px;background:#f0fff0"><input type="number" value="' + (_mgConsVal || '') + '" placeholder="0" data-ag="' + l.ag + '" data-mes="' + mes + '" style="width:80px;padding:2px 4px;border:1px solid #4a8a44;border-radius:3px;font-size:11px;text-align:right;background:#f0fff0" onblur="var e=this;_mornoGestaoSalvar(e.dataset.ag,e.dataset.mes,e.value);renderConsolidadoAcumulado()"></td>' +
+        '<td class="net-proj ' + cls(_netGerCons) + '" style="background:#1a4a16;color:#fff;font-weight:700">' + fmtBRL(_netGerCons) + '</td>' +
         '</tr>';
     }).join('');
 
     // Linha total
     const totPct = totMeta > 0 ? (totVop/totMeta)*100 : 0;
     const npCls = totNetProj >= 0 ? '#90ee90' : '#ff9999';
+    var _mgConsTotal = Object.values(_mornoGestaoCarregar()[mes] || {}).reduce(function(s,v){return s+(Number(v)||0);}, 0);
     rows += '<tr style="background:#1a3a6e;color:#fff;font-weight:700">' +
       '<td style="color:#fff">TOTAL REGIONAL <small style="opacity:0.8;font-weight:400">(' + countTrofeu + '/12 🏆)</small></td>' +
       '<td style="text-align:right">' + fmtBRL(totVop) + '</td>' +
@@ -6521,6 +6529,8 @@
       '<td style="text-align:right">' + fmtBRL(totMeta) + '</td>' +
       '<td style="text-align:center">' + totPct.toFixed(0) + '%</td>' +
       '<td></td>' +
+      '<td style="text-align:right;background:#2d5a27">' + fmtBRL(_mgConsTotal) + '</td>' +
+      '<td style="text-align:right;background:#1a4a16">' + fmtBRL(totNetProj + _mgConsTotal) + '</td>' +
       '</tr>';
     tbody.innerHTML = rows;
   }
