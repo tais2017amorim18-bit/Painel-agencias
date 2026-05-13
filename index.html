@@ -6467,6 +6467,27 @@
     renderConsolidadoAcumulado();
   }
 
+  // Retorna o Net Fechamento de uma agência com overrides aplicados (igual à Visão Geral)
+  function calcNetFechamentoAg(ag, mes) {
+    if (typeof calcAcumuladoMes !== 'function') return 0;
+    const acum = calcAcumuladoMes(ag, mes);
+    if (!acum) return 0;
+    const ovr = vgAgenciaCarregarOverride(ag, mes);
+    const ovrLiq    = (ovr.liqTotal     !== undefined && ovr.liqTotal     !== null) ? Number(ovr.liqTotal)     : null;
+    const ovrSdDesc = (ovr.saldoDesc    !== undefined && ovr.saldoDesc    !== null) ? Number(ovr.saldoDesc)    : null;
+    const ovrSdQuen = (ovr.saldoQuente  !== undefined && ovr.saldoQuente  !== null) ? Number(ovr.saldoQuente)  : null;
+    const ovrSdArv  = (ovr.saldoArv     !== undefined && ovr.saldoArv     !== null) ? Number(ovr.saldoArv)     : null;
+    const ovrNetAt  = (ovr.netAtual     !== undefined && ovr.netAtual     !== null) ? Number(ovr.netAtual)     : null;
+    const ovrNetF   = (ovr.netFechamento!== undefined && ovr.netFechamento!== null) ? Number(ovr.netFechamento): null;
+    const vLiq    = ovrLiq    !== null ? ovrLiq    : acum.saldoLiq;
+    const vSdDesc = ovrSdDesc !== null ? ovrSdDesc : acum.saldoDesc;
+    const vSdQuen = ovrSdQuen !== null ? ovrSdQuen : acum.saldoQuente;
+    const vSdArv  = ovrSdArv  !== null ? ovrSdArv  : acum.saldoArv;
+    const vNetAt  = ovrNetAt  !== null ? ovrNetAt  : acum.netAtual;
+    const calc    = vSdDesc + vSdQuen + vSdArv + vLiq + vNetAt;
+    return ovrNetF !== null ? ovrNetF : calc;
+  }
+
   // ── NOVO: Consolidado Acumulado por Agência (com Quartil + Troféu) ──
   function renderConsolidadoAcumulado() {
     const tbody = document.getElementById('tbody-consol-ag');
@@ -6499,29 +6520,10 @@
       const liqAcum = dias.reduce((s,r) => s + (Number(r.liquidacaoTotal)||0), 0);
       const netDiaAcum = dias.reduce((s,r) => s + (Number(r.netDia)||0), 0);
 
-      // Calcula Net Fechamento — mesma fórmula e overrides da Visão Geral
+      // Net Fechamento — usa função auxiliar com mesmos overrides da Visão Geral
       const acum = (typeof calcAcumuladoMes === 'function') ? calcAcumuladoMes(ag, mes) : null;
-      let netProj = 0;
+      const netProj = calcNetFechamentoAg(ag, mes);
       const meta = acum ? acum.metaVop : 0;
-      if (acum) {
-        // Aplica overrides da agência (igual à Visão Geral)
-        const _ovrAg = vgAgenciaCarregarOverride(ag, mes);
-        const _ovrLiq    = (_ovrAg.liqTotal    !== undefined && _ovrAg.liqTotal    !== null) ? Number(_ovrAg.liqTotal)    : null;
-        const _ovrSdDesc = (_ovrAg.saldoDesc   !== undefined && _ovrAg.saldoDesc   !== null) ? Number(_ovrAg.saldoDesc)   : null;
-        const _ovrSdQuen = (_ovrAg.saldoQuente !== undefined && _ovrAg.saldoQuente !== null) ? Number(_ovrAg.saldoQuente) : null;
-        const _ovrSdArv  = (_ovrAg.saldoArv    !== undefined && _ovrAg.saldoArv    !== null) ? Number(_ovrAg.saldoArv)    : null;
-        const _ovrNetAt  = (_ovrAg.netAtual     !== undefined && _ovrAg.netAtual    !== null) ? Number(_ovrAg.netAtual)   : null;
-        const _ovrNetFech= (_ovrAg.netFechamento!== undefined && _ovrAg.netFechamento!==null) ? Number(_ovrAg.netFechamento):null;
-        const _vLiq    = _ovrLiq    !== null ? _ovrLiq    : acum.saldoLiq;
-        const _vSdDesc = _ovrSdDesc !== null ? _ovrSdDesc : acum.saldoDesc;
-        const _vSdQuen = _ovrSdQuen !== null ? _ovrSdQuen : acum.saldoQuente;
-        const _vSdArv  = _ovrSdArv  !== null ? _ovrSdArv  : acum.saldoArv;
-        const _vNetAt  = _ovrNetAt  !== null ? _ovrNetAt  : acum.netAtual;
-        const _calcNetFech = _vSdDesc + _vSdQuen + _vSdArv + _vLiq + _vNetAt;
-        netProj = _ovrNetFech !== null ? _ovrNetFech : _calcNetFech;
-      } else {
-        netProj = vopAcum + liqAcum;
-      }
       const pctMeta = meta > 0 ? (vopAcum / meta) * 100 : 0;
       const q = qInfo(vopAcum);
       const trofeu = netProj > 0 ? '🏆' : '';
