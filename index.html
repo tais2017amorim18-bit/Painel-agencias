@@ -7040,53 +7040,133 @@
 
   // ── Planejamento 2026 ─────────────────────────────────────────────────────
   const PLAN_SENHA = 'Amorim2026';
+  const PLAN_DATA_KEY = 'plan2026_data';
   const MESES_PLAN = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const MESES_KEYS = ['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06','2026-07','2026-08','2026-09','2026-10','2026-11','2026-12'];
 
-  // Indicadores principais com metas (R$ mil)
-  const PLANO_PRINCIPAL = [
-    { id:'margem',   label:'Margem Total',         grupo:'Carteira',     meta:[17232,17752,18309,18963,19581,20250,20898,21592,22286,22966,23658,24335] },
-    { id:'lair',     label:'LAIR',                  grupo:'Carteira',     meta:[4206,4756,5008,5772,6440,7014,7594,8184,8632,9866,10533,10997] },
-    { id:'ativos',   label:'Ativos',                grupo:'Carteira',     meta:[1174777,1200417,1228877,1258097,1288117,1318457,1349177,1381277,1413137,1445177,1477057,1508697] },
-    { id:'vop',      label:'VOP Ativos',            grupo:'Carteira',     meta:[210900,214600,228000,250600,257400,271300,274500,286500,295900,311000,322300,330600], autoPanel: true },
-    { id:'contas',   label:'Abertura de Conta',     grupo:'Produção',     meta:[276,281,314,317,328,328,334,343,340,339,335,333] },
-    { id:'captlp',   label:'Investimentos (Cap. LP)',grupo:'Carteira',    meta:[1391958,1422706,1454935,1487983,1521863,1556417,1591655,1627931,1664745,1702275,1740367,1779028] },
-    { id:'viab',     label:'Viabilizados',          grupo:'Produção',     meta:[1943,2004,2072,2141,2211,2282,2354,2431,2508,2586,2664,2740] },
+  // Estrutura de todos os indicadores
+  const PLAN_GRUPOS = [
+    {
+      grupo: 'Margem Equalizada (R$ Mil)',
+      cor: '#1a3a6e',
+      indicadores: [
+        { id:'marg_emp',    label:'Empréstimos',         meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'marg_cambio', label:'Emp. Câmbio',          meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'marg_fin',    label:'Finanças',             meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'marg_rep',    label:'Repasses/Fin.',        meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'marg_sp',     label:'SafraPay',             meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'marg_cheq',   label:'Cheque Empresarial',  meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'marg_dem',    label:'Demais Ativos',        meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'marg_tot_emp',label:'Total Empréstimos',   meta:[0,0,0,0,0,0,0,0,0,0,0,0], bold:true },
+        { id:'marg_captlp', label:'Captação LP',          meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'marg_curto',  label:'Curto Prazo',          meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'marg_seg',    label:'Seguros',              meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'marg_serv',   label:'Serviços/Tarifas',    meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'marg_vop_sp', label:'VOP SafraPay',         meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'marg_outros', label:'Outros Produtos',      meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'marg_dem_prod',label:'Demais Produtos',    meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'marg_total',  label:'Margem Total',         meta:[17232,17752,18309,18963,19581,20250,20898,21592,22286,22966,23658,24335], bold:true, dest:true },
+        { id:'marg_desp',   label:'Despesa Total',        meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'marg_pec',    label:'PEC/REC + PDD',        meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'marg_reb',    label:'Total Rebates',        meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'marg_liq',    label:'Margem Líquida',       meta:[0,0,0,0,0,0,0,0,0,0,0,0], bold:true, dest:true },
+      ]
+    },
+    {
+      grupo: 'Carteiras (R$ MM)',
+      cor: '#0d4a8e',
+      indicadores: [
+        { id:'cart_emp',    label:'Empréstimos',         meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'cart_cambio', label:'Emp. Câmbio',          meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'cart_fin',    label:'Finanças',             meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'cart_rep',    label:'Repasses/Fin.',        meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'cart_sp',     label:'SafraPay',             meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'cart_cheq',   label:'Cheque Empresarial',  meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'cart_dem',    label:'Demais Ativos',        meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'cart_tot',    label:'Total Empréstimos',   meta:[0,0,0,0,0,0,0,0,0,0,0,0], bold:true },
+        { id:'cart_captlp', label:'Captação LP',          meta:[1391958,1422706,1454935,1487983,1521863,1556417,1591655,1627931,1664745,1702275,1740367,1779028] },
+        { id:'cart_curto',  label:'Curto Prazo',          meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+      ]
+    },
+    {
+      grupo: 'VOP Líquido (R$ MM)',
+      cor: '#0d6e56',
+      indicadores: [
+        { id:'vop_emp',     label:'Empréstimos',         meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'vop_cambio',  label:'Emp. Câmbio',          meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'vop_fin',     label:'Finanças',             meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'vop_rep',     label:'Repasses/Fin.',        meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'vop_sp',      label:'SafraPay',             meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'vop_cheq',    label:'Cheque Empresarial',  meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'vop_dem',     label:'Demais Ativos',        meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'vop_tot',     label:'Total Empréstimos',   meta:[0,0,0,0,0,0,0,0,0,0,0,0], bold:true },
+        { id:'vop_captlp',  label:'Captação LP',          meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'vop_curto',   label:'Curto Prazo',          meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+      ]
+    },
+    {
+      grupo: 'Volume (R$ MM)',
+      cor: '#7b3f00',
+      indicadores: [
+        { id:'vol_cobr',    label:'Cobrança (Entrada)',   meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'vol_pix_env', label:'PIX - Envio',          meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'vol_pix_rec', label:'PIX - Recebimentos',   meta:[522,526,533,536,540,557,565,578,580,586,591,595] },
+        { id:'vol_pag',     label:'Pagamentos',           meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'vol_seg',     label:'Seguros',              meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+        { id:'vol_vop_sp',  label:'VOP SafraPay',         meta:[0,0,0,0,0,0,0,0,0,0,0,0] },
+      ]
+    },
+    {
+      grupo: 'Produção / Outros',
+      cor: '#5a0d6e',
+      indicadores: [
+        { id:'prod_viab',   label:'Viabilizados',         meta:[1943,2004,2072,2141,2211,2282,2354,2431,2508,2586,2664,2740] },
+        { id:'prod_contas', label:'Abertura de Conta',    meta:[276,281,314,317,328,328,334,343,340,339,335,333] },
+        { id:'prod_cred',   label:'Credenciamentos',      meta:[66,67,73,75,76,75,76,75,74,75,73,73] },
+        { id:'prod_lair',   label:'LAIR',                 meta:[4206,4756,5008,5772,6440,7014,7594,8184,8632,9866,10533,10997], dest:true },
+      ]
+    },
   ];
 
-  // Salva/carrega realizados do planejamento no app_storage
-  const PLAN_REAL_KEY = 'planejamento_realizado_2026';
-  function _planCarregarReal() {
-    try { return JSON.parse(localStorage.getItem(PLAN_REAL_KEY) || '{}'); } catch(_) { return {}; }
-  }
-  function _planSalvarReal(indicadorId, mesIdx, valor) {
-    const data = _planCarregarReal();
-    if (!data[indicadorId]) data[indicadorId] = {};
-    data[indicadorId][mesIdx] = valor;
-    localStorage.setItem(PLAN_REAL_KEY, JSON.stringify(data));
-    // Sobe para Supabase
-    if (_supaClient) {
-      _supaClient.from('app_storage').upsert({ chave: PLAN_REAL_KEY, valor: data }, { onConflict: 'chave' }).select();
-    }
-    vgRenderPlanejamento();
+  // Carrega dados (meta e real) do banco/localStorage
+  function _planCarregarDados() {
+    try {
+      var raw = localStorage.getItem(PLAN_DATA_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch(_) {}
+    return {};
   }
 
-  // Pega VOP realizado do _cache para um mês
-  function _planVopReal(mesKey) {
-    if (!_cache || !_cache.lancamentos) return null;
-    const lancs = _cache.lancamentos.filter(r => r.date && r.date.startsWith(mesKey));
-    if (!lancs.length) return null;
-    const vopTotal = lancs.reduce((s,r) => s + (Number(r.vopDia)||0), 0);
-    return Math.round(vopTotal / 1000); // converte para R$ mil
+  function _planSalvarDados(dados) {
+    try { localStorage.setItem(PLAN_DATA_KEY, JSON.stringify(dados)); } catch(_) {}
+    if (_supaClient) {
+      _supaClient.from('app_storage').upsert({
+        chave: PLAN_DATA_KEY,
+        valor: dados,
+        atualizado_em: new Date().toISOString()
+      }, { onConflict: 'chave' }).select()
+      .then(function(r){ if(r.error) console.warn('[Plan] erro salvar:', r.error); });
+    }
+  }
+
+  async function _planCarregarBanco() {
+    if (!_supaClient) return;
+    try {
+      var res = await _supaClient.from('app_storage').select('valor').eq('chave', PLAN_DATA_KEY).maybeSingle();
+      if (res.data && res.data.valor) {
+        var v = typeof res.data.valor === 'string' ? JSON.parse(res.data.valor) : res.data.valor;
+        localStorage.setItem(PLAN_DATA_KEY, JSON.stringify(v));
+      }
+    } catch(e) {}
   }
 
   function vgPlanejamentoLogin() {
-    const inp = document.getElementById('plan-senha-input');
+    var inp = document.getElementById('plan-senha-input');
     if (!inp) return;
     if (inp.value === PLAN_SENHA) {
       document.getElementById('plan-login').style.display = 'none';
       document.getElementById('plan-content').style.display = 'block';
-      vgRenderPlanejamento();
+      _planCarregarBanco().then(function(){ vgRenderPlanejamento(); });
     } else {
       document.getElementById('plan-login-erro').style.display = 'block';
       inp.value = ''; inp.focus();
@@ -7103,109 +7183,125 @@
   window.vgPlanejamentoLogout = vgPlanejamentoLogout;
 
   function fmtPlan(v) {
-    if (v === undefined || v === null || v === '') return '—';
+    if (v === undefined || v === null || v === '' || v === 0) return '—';
     v = Number(v);
     if (isNaN(v)) return '—';
-    if (v >= 1000000) return (v/1000000).toFixed(1) + 'M';
-    if (v >= 1000) return (v/1000).toFixed(1) + 'k';
-    return v.toLocaleString('pt-BR');
-  }
-  function fmtPct(real, meta) {
-    if (!meta || !real) return '—';
-    const p = Math.round(real / meta * 100);
-    const cor = p >= 100 ? '#0d6e56' : p >= 80 ? '#e67e22' : '#a23026';
-    return `<span style="color:${cor};font-weight:700">${p}%</span>`;
+    var neg = v < 0;
+    var abs = Math.abs(v);
+    var s;
+    if (abs >= 1000000) s = (abs/1000000).toFixed(1) + 'M';
+    else if (abs >= 1000) s = (abs/1000).toFixed(1) + 'k';
+    else s = abs.toLocaleString('pt-BR');
+    return neg ? '(' + s + ')' : s;
   }
 
-  function vgPlanSalvarInput(indicadorId, mesIdx, el) {
-    const v = parseFloat(el.value.replace(/\./g,'').replace(',','.'));
-    _planSalvarReal(indicadorId, mesIdx, isNaN(v) ? null : v);
+  function fmtPct(real, meta) {
+    if (!meta || !real) return '';
+    var p = Math.round(Number(real) / Number(meta) * 100);
+    var cor = p >= 100 ? '#0d6e56' : p >= 80 ? '#e67e22' : '#a23026';
+    return '<span style="font-weight:700;color:' + cor + '">' + p + '%</span>';
   }
-  window.vgPlanSalvarInput = vgPlanSalvarInput;
+
+  function _planSalvarCelula(id, tipo, mesIdx, el) {
+    var v = el.value.replace(',','.');
+    var num = parseFloat(v);
+    var dados = _planCarregarDados();
+    if (!dados[id]) dados[id] = {};
+    if (!dados[id][tipo]) dados[id][tipo] = new Array(12).fill(null);
+    dados[id][tipo][mesIdx] = isNaN(num) ? null : num;
+    _planSalvarDados(dados);
+    vgRenderPlanejamento();
+  }
+  window._planSalvarCelula = _planSalvarCelula;
 
   function vgRenderPlanejamento() {
-    const tbody = document.getElementById('plan-tbody');
+    var tbody = document.getElementById('plan-tbody');
     if (!tbody) return;
-    const real = _planCarregarReal();
-    let html = '';
-    let grupoAtual = '';
-    const CORES = { 'Carteira':'#1a3a6e', 'Produção':'#0d6e56' };
+    var dados = _planCarregarDados();
+    var html = '';
 
-    PLANO_PRINCIPAL.forEach(row => {
-      if (row.grupo !== grupoAtual) {
-        grupoAtual = row.grupo;
-        const cor = CORES[grupoAtual] || '#333';
-        html += `<tr style="background:${cor};color:#fff">
-          <td style="padding:6px 10px;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;position:sticky;left:0;background:${cor};z-index:2">${grupoAtual}</td>
-          <td colspan="3" style="padding:6px;font-size:10px;text-align:center">S1 (Jan-Jun)</td>
-          <td colspan="3" style="padding:6px;font-size:10px;text-align:center">S2 (Jul-Dez)</td>
-          ${MESES_PLAN.map(m => `<td colspan="3" style="padding:4px 2px;font-size:10px;text-align:center">${m}</td>`).join('')}
-          <td style="padding:6px;font-size:10px;text-align:center">Total</td>
-        </tr>
-        <tr style="background:${cor}22;font-size:10px;color:#555;font-weight:600">
-          <td style="padding:4px 10px;position:sticky;left:0;background:${cor}22;z-index:2">Indicador</td>
-          <td style="padding:4px 6px;text-align:center">Plan</td><td style="padding:4px 6px;text-align:center">Real</td><td style="padding:4px 6px;text-align:center">%</td>
-          <td style="padding:4px 6px;text-align:center">Plan</td><td style="padding:4px 6px;text-align:center">Real</td><td style="padding:4px 6px;text-align:center">%</td>
-          ${MESES_PLAN.map(() => '<td style="padding:4px 2px;text-align:center">Plan</td><td style="padding:4px 2px;text-align:center">Real</td><td style="padding:4px 2px;text-align:center">%</td>').join('')}
-          <td style="padding:4px 6px;text-align:center">%</td>
-        </tr>`;
-      }
+    PLAN_GRUPOS.forEach(function(grupo) {
+      var cor = grupo.cor;
+      // Cabeçalho do grupo
+      html += '<tr style="background:' + cor + ';color:#fff">' +
+        '<td colspan="' + (2 + MESES_PLAN.length * 3 + 7) + '" style="padding:6px 10px;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">' +
+        grupo.grupo + '</td></tr>';
 
-      const rowReal = real[row.id] || {};
-      const metas = row.meta;
+      grupo.indicadores.forEach(function(ind) {
+        var d = dados[ind.id] || {};
+        var meta = d.meta || ind.meta || new Array(12).fill(0);
+        var real = d.real || new Array(12).fill(null);
 
-      // Calcula realizados por mês
-      const realizados = MESES_KEYS.map((mk, i) => {
-        if (row.autoPanel && row.id === 'vop') {
-          const auto = _planVopReal(mk);
-          return auto !== null ? auto : (rowReal[i] !== undefined ? rowReal[i] : null);
+        // Calcula S1, S2, Total
+        var metaS1 = meta.slice(0,6).reduce(function(s,v){return s+(v||0);},0);
+        var metaS2 = meta.slice(6,12).reduce(function(s,v){return s+(v||0);},0);
+        var realS1 = real.slice(0,6).filter(function(v){return v!==null;}).reduce(function(s,v){return s+v;},0);
+        var realS2 = real.slice(6,12).filter(function(v){return v!==null;}).reduce(function(s,v){return s+v;},0);
+        var temS1  = real.slice(0,6).some(function(v){return v!==null;});
+        var temS2  = real.slice(6,12).some(function(v){return v!==null;});
+        var metaAno = meta.reduce(function(s,v){return s+(v||0);},0);
+        var realAno = real.filter(function(v){return v!==null;}).reduce(function(s,v){return s+v;},0);
+        var temAno  = real.some(function(v){return v!==null;});
+
+        var destBg = ind.dest ? 'background:#f0f8ff' : 'background:#fff';
+        var fw = ind.bold ? 'font-weight:700' : '';
+
+        html += '<tr style="' + destBg + '" onmouseover="this.style.background=\'#f5f8ff\'" onmouseout="this.style.background=\'' + (ind.dest?'#f0f8ff':'#fff') + '\'">' +
+          '<td style="padding:5px 10px;font-size:11px;' + fw + ';color:#222;border-bottom:1px solid #eee;position:sticky;left:0;background:inherit;z-index:1;min-width:170px">' + ind.label + '</td>' +
+          // S1
+          '<td style="padding:4px 5px;font-size:10px;text-align:right;border-bottom:1px solid #eee;background:#e8edf7">' + fmtPlan(metaS1) + '</td>' +
+          '<td style="padding:4px 3px;font-size:10px;text-align:right;border-bottom:1px solid #eee;background:#e8edf7">' + (temS1?fmtPlan(realS1):'') + '</td>' +
+          '<td style="padding:4px 3px;font-size:10px;text-align:center;border-bottom:1px solid #eee;background:#ddeedd">' + (temS1?fmtPct(realS1,metaS1):'') + '</td>' +
+          // S2
+          '<td style="padding:4px 5px;font-size:10px;text-align:right;border-bottom:1px solid #eee;background:#e8edf7">' + fmtPlan(metaS2) + '</td>' +
+          '<td style="padding:4px 3px;font-size:10px;text-align:right;border-bottom:1px solid #eee;background:#e8edf7">' + (temS2?fmtPlan(realS2):'') + '</td>' +
+          '<td style="padding:4px 3px;font-size:10px;text-align:center;border-bottom:1px solid #eee;background:#ddeedd">' + (temS2?fmtPct(realS2,metaS2):'') + '</td>';
+
+        // Meses individuais
+        for (var i = 0; i < 12; i++) {
+          var m = meta[i] || 0;
+          var r = real[i];
+          var idEsc = ind.id;
+          var borderL = (i===6) ? 'border-left:2px solid #ccd' : '';
+          html += '<td style="padding:3px 4px;font-size:10px;text-align:right;border-bottom:1px solid #eee;' + borderL + '">' + fmtPlan(m) + '</td>' +
+            '<td style="padding:2px;text-align:center;border-bottom:1px solid #eee;' + borderL + '">' +
+            '<input type="text" value="' + (r !== null ? r : '') + '" placeholder="—" data-id="' + idEsc + '" data-tipo="real" data-mes="' + i + '"' +
+            ' style="width:48px;padding:2px 3px;border:1px solid #ddd;border-radius:2px;font-size:10px;text-align:right;background:#fff8e1"' +
+            ' onblur="_planSalvarCelula(this.dataset.id,this.dataset.tipo,Number(this.dataset.mes),this)">' +
+            '</td>' +
+            '<td style="padding:3px 2px;font-size:10px;text-align:center;border-bottom:1px solid #eee">' + (r!==null&&m?fmtPct(r,m):'') + '</td>';
         }
-        return rowReal[i] !== undefined ? rowReal[i] : null;
+
+        // % Ano
+        html += '<td style="padding:4px 5px;font-size:11px;font-weight:700;text-align:center;border-bottom:1px solid #eee;background:#f0f4fb">' +
+          (temAno && metaAno ? fmtPct(realAno,metaAno) : '') + '</td>' +
+          '</tr>';
       });
-
-      // S1 e S2
-      const metaS1 = metas.slice(0,6).reduce((s,v)=>s+v,0);
-      const metaS2 = metas.slice(6,12).reduce((s,v)=>s+v,0);
-      const realS1 = realizados.slice(0,6).filter(v=>v!==null).reduce((s,v)=>s+v,0);
-      const realS2 = realizados.slice(6,12).filter(v=>v!==null).reduce((s,v)=>s+v,0);
-      const temS1 = realizados.slice(0,6).some(v=>v!==null);
-      const temS2 = realizados.slice(6,12).some(v=>v!==null);
-      const metaTotal = metas.reduce((s,v)=>s+v,0);
-      const realTotal = realizados.filter(v=>v!==null).reduce((s,v)=>s+v,0);
-      const temTotal = realizados.some(v=>v!==null);
-
-      const cellsMes = metas.map((meta, i) => {
-        const r = realizados[i];
-        const isAuto = row.autoPanel && row.id === 'vop' && _planVopReal(MESES_KEYS[i]) !== null;
-        const inputVal = r !== null ? r : '';
-        const inputStyle = isAuto ? 'background:#e8f5e9;color:#0d6e56' : 'background:#fff8e1';
-        return `<td style="padding:3px 4px;text-align:center;font-size:11px;color:#333;border-bottom:1px solid #eee">${fmtPlan(meta)}</td>
-          <td style="padding:2px;text-align:center;border-bottom:1px solid #eee">
-            <input type="text" value="${inputVal}" placeholder="—"
-              style="width:52px;padding:2px 4px;border:1px solid #ddd;border-radius:3px;font-size:11px;text-align:center;${inputStyle}"
-              onblur="vgPlanSalvarInput('${row.id}',${i},this)"
-              onkeydown="if(event.key==='Enter'||event.key==='Tab'){vgPlanSalvarInput('${row.id}',${i},this)}"
-              ${isAuto ? 'readonly title="Calculado automaticamente do painel"' : ''}>
-          </td>
-          <td style="padding:3px 4px;text-align:center;font-size:11px;border-bottom:1px solid #eee">${r !== null ? fmtPct(r, meta) : '—'}</td>`;
-      }).join('');
-
-      html += `<tr style="background:#fff" onmouseover="this.style.background='#f8faff'" onmouseout="this.style.background='#fff'">
-        <td style="padding:6px 10px;font-size:12px;font-weight:600;color:#222;border-bottom:1px solid #eee;position:sticky;left:0;background:inherit;z-index:1">${row.label}</td>
-        <td style="padding:5px 6px;text-align:center;font-size:11px;border-bottom:1px solid #eee">${fmtPlan(metaS1)}</td>
-        <td style="padding:5px 6px;text-align:center;font-size:11px;border-bottom:1px solid #eee">${temS1 ? fmtPlan(realS1) : '—'}</td>
-        <td style="padding:5px 6px;text-align:center;font-size:11px;border-bottom:1px solid #eee;background:#f0faf7">${temS1 ? fmtPct(realS1,metaS1) : '—'}</td>
-        <td style="padding:5px 6px;text-align:center;font-size:11px;border-bottom:1px solid #eee">${fmtPlan(metaS2)}</td>
-        <td style="padding:5px 6px;text-align:center;font-size:11px;border-bottom:1px solid #eee">${temS2 ? fmtPlan(realS2) : '—'}</td>
-        <td style="padding:5px 6px;text-align:center;font-size:11px;border-bottom:1px solid #eee;background:#f0faf7">${temS2 ? fmtPct(realS2,metaS2) : '—'}</td>
-        ${cellsMes}
-        <td style="padding:5px 6px;text-align:center;font-size:12px;font-weight:700;border-bottom:1px solid #eee;background:#f0f4fb">${temTotal ? fmtPct(realTotal,metaTotal) : '—'}</td>
-      </tr>`;
     });
 
     tbody.innerHTML = html;
   }
   window.vgRenderPlanejamento = vgRenderPlanejamento;
+
+  function vgSalvarTodoPlanejamento() {
+    var inputs = document.querySelectorAll('#plan-tbody input[data-id]');
+    var dados = _planCarregarDados();
+    inputs.forEach(function(el) {
+      var id = el.getAttribute('data-id');
+      var tipo = el.getAttribute('data-tipo');
+      var mes = Number(el.getAttribute('data-mes'));
+      if (!el.value && el.value !== '0') return;
+      var num = parseFloat(el.value.replace(',','.'));
+      if (isNaN(num)) return;
+      if (!dados[id]) dados[id] = {};
+      if (!dados[id][tipo]) dados[id][tipo] = new Array(12).fill(null);
+      dados[id][tipo][mes] = num;
+    });
+    _planSalvarDados(dados);
+    showToast('💾 Planejamento salvo!');
+    vgRenderPlanejamento();
+  }
+  window.vgSalvarTodoPlanejamento = vgSalvarTodoPlanejamento;
 
 </script>
 
@@ -7231,41 +7327,46 @@
         <span style="font-size:11px;color:#666">Campos amarelos = editáveis | Verde = automático do painel</span>
         <button onclick="vgPlanejamentoLogout()" style="margin-left:auto;font-size:11px;padding:4px 10px;border:1px solid #ccc;border-radius:4px;background:#f5f5f5;cursor:pointer">🔒 Sair</button>
       </div>
+      <div style="margin-bottom:8px;font-size:11px;color:#555">
+        Campos <span style="background:#fff8e1;padding:1px 6px;border-radius:3px;border:1px solid #ddd">amarelos</span> = Realizado (editável). Digite e clique fora para salvar.
+        <button onclick="vgSalvarTodoPlanejamento()" style="margin-left:12px;padding:4px 12px;background:#1a3a6e;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer">💾 Salvar tudo</button>
+      </div>
       <div class="tbl-wrap" style="overflow-x:auto">
-      <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:1600px">
+      <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:1800px">
         <thead>
-          <tr style="background:#1a3a6e;color:#fff;font-size:11px">
+          <tr style="background:#1a3a6e;color:#fff;font-size:10px">
             <th rowspan="2" style="padding:8px 10px;text-align:left;min-width:170px;position:sticky;left:0;background:#1a3a6e;z-index:3">Indicador</th>
-            <th colspan="3" style="padding:6px;text-align:center;border-left:2px solid #0d4a8e;background:#0d4a8e">S1 — Jan a Jun</th>
-            <th colspan="3" style="padding:6px;text-align:center;border-left:2px solid #0d4a8e;background:#0d4a8e">S2 — Jul a Dez</th>
-            <th colspan="3" style="padding:6px;text-align:center;border-left:2px solid #2a5a9e">Jan</th>
-            <th colspan="3" style="padding:6px;text-align:center;border-left:1px solid #2a5a9e">Fev</th>
-            <th colspan="3" style="padding:6px;text-align:center;border-left:1px solid #2a5a9e">Mar</th>
-            <th colspan="3" style="padding:6px;text-align:center;border-left:1px solid #2a5a9e">Abr</th>
-            <th colspan="3" style="padding:6px;text-align:center;border-left:1px solid #2a5a9e">Mai</th>
-            <th colspan="3" style="padding:6px;text-align:center;border-left:1px solid #2a5a9e">Jun</th>
-            <th colspan="3" style="padding:6px;text-align:center;border-left:2px solid #2a5a9e">Jul</th>
-            <th colspan="3" style="padding:6px;text-align:center;border-left:1px solid #2a5a9e">Ago</th>
-            <th colspan="3" style="padding:6px;text-align:center;border-left:1px solid #2a5a9e">Set</th>
-            <th colspan="3" style="padding:6px;text-align:center;border-left:1px solid #2a5a9e">Out</th>
-            <th colspan="3" style="padding:6px;text-align:center;border-left:1px solid #2a5a9e">Nov</th>
-            <th colspan="3" style="padding:6px;text-align:center;border-left:1px solid #2a5a9e">Dez</th>
-            <th rowspan="2" style="padding:8px 6px;text-align:center;min-width:55px;background:#0d3a7e;border-left:2px solid #0d3a7e">% Ano</th>
+            <th colspan="3" style="padding:5px;text-align:center;background:#0d4a8e">S1 — Jan/Jun</th>
+            <th colspan="3" style="padding:5px;text-align:center;background:#0d4a8e">S2 — Jul/Dez</th>
+            <th colspan="3" style="padding:5px;text-align:center;border-left:2px solid #2a5a9e">Jan</th>
+            <th colspan="3" style="padding:5px;text-align:center">Fev</th>
+            <th colspan="3" style="padding:5px;text-align:center">Mar</th>
+            <th colspan="3" style="padding:5px;text-align:center">Abr</th>
+            <th colspan="3" style="padding:5px;text-align:center">Mai</th>
+            <th colspan="3" style="padding:5px;text-align:center">Jun</th>
+            <th colspan="3" style="padding:5px;text-align:center;border-left:2px solid #2a5a9e">Jul</th>
+            <th colspan="3" style="padding:5px;text-align:center">Ago</th>
+            <th colspan="3" style="padding:5px;text-align:center">Set</th>
+            <th colspan="3" style="padding:5px;text-align:center">Out</th>
+            <th colspan="3" style="padding:5px;text-align:center">Nov</th>
+            <th colspan="3" style="padding:5px;text-align:center">Dez</th>
+            <th rowspan="2" style="padding:6px;text-align:center;background:#0d3a7e;min-width:45px">% Ano</th>
           </tr>
-          <tr style="background:#1a3a6e;color:#ccd6f0;font-size:10px">
-            <th style="padding:4px 4px;text-align:center;background:#0d4a8e">Plan</th><th style="padding:4px 4px;text-align:center;background:#0d4a8e">Real</th><th style="padding:4px 4px;text-align:center;background:#0d4a8e">%</th>
-            <th style="padding:4px 4px;text-align:center;background:#0d4a8e">Plan</th><th style="padding:4px 4px;text-align:center;background:#0d4a8e">Real</th><th style="padding:4px 4px;text-align:center;background:#0d4a8e">%</th>
-            <th style="padding:4px 4px;text-align:center">Plan</th><th style="padding:4px 4px;text-align:center">Real</th><th style="padding:4px 4px;text-align:center">%</th>
-            <th style="padding:4px 4px;text-align:center">Plan</th><th style="padding:4px 4px;text-align:center">Real</th><th style="padding:4px 4px;text-align:center">%</th>
-            <th style="padding:4px 4px;text-align:center">Plan</th><th style="padding:4px 4px;text-align:center">Real</th><th style="padding:4px 4px;text-align:center">%</th>
-            <th style="padding:4px 4px;text-align:center">Plan</th><th style="padding:4px 4px;text-align:center">Real</th><th style="padding:4px 4px;text-align:center">%</th>
-            <th style="padding:4px 4px;text-align:center">Plan</th><th style="padding:4px 4px;text-align:center">Real</th><th style="padding:4px 4px;text-align:center">%</th>
-            <th style="padding:4px 4px;text-align:center">Plan</th><th style="padding:4px 4px;text-align:center">Real</th><th style="padding:4px 4px;text-align:center">%</th>
-            <th style="padding:4px 4px;text-align:center">Plan</th><th style="padding:4px 4px;text-align:center">Real</th><th style="padding:4px 4px;text-align:center">%</th>
-            <th style="padding:4px 4px;text-align:center">Plan</th><th style="padding:4px 4px;text-align:center">Real</th><th style="padding:4px 4px;text-align:center">%</th>
-            <th style="padding:4px 4px;text-align:center">Plan</th><th style="padding:4px 4px;text-align:center">Real</th><th style="padding:4px 4px;text-align:center">%</th>
-            <th style="padding:4px 4px;text-align:center">Plan</th><th style="padding:4px 4px;text-align:center">Real</th><th style="padding:4px 4px;text-align:center">%</th>
-            <th style="padding:4px 4px;text-align:center">Plan</th><th style="padding:4px 4px;text-align:center">Real</th><th style="padding:4px 4px;text-align:center">%</th>
+          <tr style="background:#1a3a6e;color:#ccd6f0;font-size:9px">
+            <th style="padding:3px;text-align:center;background:#0d4a8e">Plan</th><th style="padding:3px;text-align:center;background:#0d4a8e">Real</th><th style="padding:3px;text-align:center;background:#0d4a8e">%</th>
+            <th style="padding:3px;text-align:center;background:#0d4a8e">Plan</th><th style="padding:3px;text-align:center;background:#0d4a8e">Real</th><th style="padding:3px;text-align:center;background:#0d4a8e">%</th>
+            <th style="padding:3px;text-align:center;border-left:2px solid #2a5a9e">Plan</th><th style="padding:3px;text-align:center">Real</th><th style="padding:3px;text-align:center">%</th>
+            <th style="padding:3px;text-align:center">Plan</th><th style="padding:3px;text-align:center">Real</th><th style="padding:3px;text-align:center">%</th>
+            <th style="padding:3px;text-align:center">Plan</th><th style="padding:3px;text-align:center">Real</th><th style="padding:3px;text-align:center">%</th>
+            <th style="padding:3px;text-align:center">Plan</th><th style="padding:3px;text-align:center">Real</th><th style="padding:3px;text-align:center">%</th>
+            <th style="padding:3px;text-align:center">Plan</th><th style="padding:3px;text-align:center">Real</th><th style="padding:3px;text-align:center">%</th>
+            <th style="padding:3px;text-align:center">Plan</th><th style="padding:3px;text-align:center">Real</th><th style="padding:3px;text-align:center">%</th>
+            <th style="padding:3px;text-align:center;border-left:2px solid #2a5a9e">Plan</th><th style="padding:3px;text-align:center">Real</th><th style="padding:3px;text-align:center">%</th>
+            <th style="padding:3px;text-align:center">Plan</th><th style="padding:3px;text-align:center">Real</th><th style="padding:3px;text-align:center">%</th>
+            <th style="padding:3px;text-align:center">Plan</th><th style="padding:3px;text-align:center">Real</th><th style="padding:3px;text-align:center">%</th>
+            <th style="padding:3px;text-align:center">Plan</th><th style="padding:3px;text-align:center">Real</th><th style="padding:3px;text-align:center">%</th>
+            <th style="padding:3px;text-align:center">Plan</th><th style="padding:3px;text-align:center">Real</th><th style="padding:3px;text-align:center">%</th>
+            <th style="padding:3px;text-align:center">Plan</th><th style="padding:3px;text-align:center">Real</th><th style="padding:3px;text-align:center">%</th>
           </tr>
         </thead>
         <tbody id="plan-tbody"></tbody>
