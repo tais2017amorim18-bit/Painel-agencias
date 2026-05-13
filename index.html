@@ -2681,8 +2681,12 @@
       // Carrega Morno Gestão
       try {
         const { data: mgRow } = await _supaClient.from('app_storage').select('valor').eq('chave', _MORNO_GESTAO_KEY).maybeSingle();
-        if (mgRow && mgRow.valor) _cache['_mornoGestao'] = typeof mgRow.valor === 'string' ? JSON.parse(mgRow.valor) : mgRow.valor;
-      } catch(_) {}
+        if (mgRow && mgRow.valor) {
+          var _mgParsed = typeof mgRow.valor === 'string' ? JSON.parse(mgRow.valor) : mgRow.valor;
+          _cache['_mornoGestao'] = _mgParsed;
+          try { localStorage.setItem('__morno_gestao_vg', JSON.stringify(_mgParsed)); } catch(_) {}
+        }
+      } catch(_e) { console.warn('[Morno] erro ao carregar:', _e); }
       _atualizarStatusSupa('🟢 Online', 'sync');
       // Renderiza imediatamente após ter os dados
       if (typeof renderVisaoGeral === 'function') renderVisaoGeral();
@@ -3014,7 +3018,13 @@
   // ── Morno Gestão — armazenamento por agência/mês ──────────────────────
   const _MORNO_GESTAO_KEY = 'morno_gestao_vg';
   function _mornoGestaoCarregar() {
-    try { return _cache['_mornoGestao'] || {}; } catch(_) { return {}; }
+    try {
+      if (_cache['_mornoGestao'] && Object.keys(_cache['_mornoGestao']).length > 0) return _cache['_mornoGestao'];
+      // Fallback: tenta localStorage
+      var local = _mornoGestaoCarregarLocal ? _mornoGestaoCarregarLocal() : {};
+      if (Object.keys(local).length > 0) { _cache['_mornoGestao'] = local; return local; }
+      return {};
+    } catch(_) { return {}; }
   }
   function _mornoGestaoSalvar(agency, mes, valor) {
     if (!_cache['_mornoGestao']) _cache['_mornoGestao'] = {};
@@ -3024,13 +3034,30 @@
     } else {
       _cache['_mornoGestao'][mes][agency] = Number(valor);
     }
-    // Persiste no Supabase via app_storage
+    // Salva no localStorage como fallback
+    try { localStorage.setItem('__morno_gestao_vg', JSON.stringify(_cache['_mornoGestao'])); } catch(_) {}
+    // Persiste no Supabase
     if (_supaClient) {
-      _supaClient.from('app_storage').upsert({ chave: _MORNO_GESTAO_KEY, valor: _cache['_mornoGestao'] }, { onConflict: 'chave' }).select();
+      _supaClient.from('app_storage').upsert({
+        chave: _MORNO_GESTAO_KEY,
+        valor: JSON.stringify(_cache['_mornoGestao']),
+        atualizado_em: new Date().toISOString()
+      }, { onConflict: 'chave' }).select()
+      .then(function(res) { if (res.error) console.warn('[Morno] erro ao salvar:', res.error); });
     }
     if (typeof renderVisaoGeral === 'function') renderVisaoGeral();
+    if (typeof renderConsolidadoAcumulado === 'function') renderConsolidadoAcumulado();
   }
   window._mornoGestaoSalvar = _mornoGestaoSalvar;
+
+  function _mornoGestaoCarregarLocal() {
+    // Tenta carregar do localStorage como fallback
+    try {
+      var v = localStorage.getItem('__morno_gestao_vg');
+      if (v) return JSON.parse(v);
+    } catch(_) {}
+    return {};
+  }
 
   function vgSalvarEAtualizar() {
     _vgLimparPendente();
@@ -6472,15 +6499,29 @@
       const liqAcum = dias.reduce((s,r) => s + (Number(r.liquidacaoTotal)||0), 0);
       const netDiaAcum = dias.reduce((s,r) => s + (Number(r.netDia)||0), 0);
 
-      // Calcula Net Projetado do mês — mesma fórmula da Visão Geral
+      // Calcula Net Fechamento — mesma fórmula e overrides da Visão Geral
       const acum = (typeof calcAcumuladoMes === 'function') ? calcAcumuladoMes(ag, mes) : null;
       let netProj = 0;
+      const meta = acum ? acum.metaVop : 0;
       if (acum) {
-        netProj = acum.saldoLiq + acum.netAtual + acum.saldoDesc + acum.saldoArv + acum.quenteIni;
+        // Aplica overrides da agência (igual à Visão Geral)
+        const _ovrAg = vgAgenciaCarregarOverride(ag, mes);
+        const _ovrLiq    = (_ovrAg.liqTotal    !== undefined && _ovrAg.liqTotal    !== null) ? Number(_ovrAg.liqTotal)    : null;
+        const _ovrSdDesc = (_ovrAg.saldoDesc   !== undefined && _ovrAg.saldoDesc   !== null) ? Number(_ovrAg.saldoDesc)   : null;
+        const _ovrSdQuen = (_ovrAg.saldoQuente !== undefined && _ovrAg.saldoQuente !== null) ? Number(_ovrAg.saldoQuente) : null;
+        const _ovrSdArv  = (_ovrAg.saldoArv    !== undefined && _ovrAg.saldoArv    !== null) ? Number(_ovrAg.saldoArv)    : null;
+        const _ovrNetAt  = (_ovrAg.netAtual     !== undefined && _ovrAg.netAtual    !== null) ? Number(_ovrAg.netAtual)   : null;
+        const _ovrNetFech= (_ovrAg.netFechamento!== undefined && _ovrAg.netFechamento!==null) ? Number(_ovrAg.netFechamento):null;
+        const _vLiq    = _ovrLiq    !== null ? _ovrLiq    : acum.saldoLiq;
+        const _vSdDesc = _ovrSdDesc !== null ? _ovrSdDesc : acum.saldoDesc;
+        const _vSdQuen = _ovrSdQuen !== null ? _ovrSdQuen : acum.saldoQuente;
+        const _vSdArv  = _ovrSdArv  !== null ? _ovrSdArv  : acum.saldoArv;
+        const _vNetAt  = _ovrNetAt  !== null ? _ovrNetAt  : acum.netAtual;
+        const _calcNetFech = _vSdDesc + _vSdQuen + _vSdArv + _vLiq + _vNetAt;
+        netProj = _ovrNetFech !== null ? _ovrNetFech : _calcNetFech;
       } else {
         netProj = vopAcum + liqAcum;
       }
-      const meta = acum ? acum.metaVop : 0;
       const pctMeta = meta > 0 ? (vopAcum / meta) * 100 : 0;
       const q = qInfo(vopAcum);
       const trofeu = netProj > 0 ? '🏆' : '';
