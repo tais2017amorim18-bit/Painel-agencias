@@ -959,6 +959,7 @@
   <div class="card" style="border:2px solid #1a3a6e;background:linear-gradient(135deg,#fafbff 0%,#eef3fb 100%)">
     <div class="card-title" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span>🏆 Consolidado Acumulado por Agência — Mês</span>
+      <button onclick="vgSalvarMornoGestao()" style="margin-left:auto;font-size:11px;padding:4px 12px;background:#2d5a27;color:#fff;border:none;border-radius:4px;cursor:pointer">💾 Salvar Morno Gestão</button>
       <span class="pill pill-blue">VOP somado de todos os dias</span>
       <span style="font-size:10px;color:#666;margin-left:auto">Q1 &gt; R$50M | Q2 &gt; R$39M | Q3 &gt; R$24M | Q4 ≤ R$24M</span>
     </div>
@@ -2678,15 +2679,8 @@
         _carregarNovasTabelas(),
         Promise.all([PROD_KEY, 'lancamentos_arquivados'].map(k => _baixarChave(k)))
       ]);
-      // Carrega Morno Gestão
-      try {
-        const { data: mgRow } = await _supaClient.from('app_storage').select('valor').eq('chave', _MORNO_GESTAO_KEY).maybeSingle();
-        if (mgRow && mgRow.valor) {
-          var _mgParsed = typeof mgRow.valor === 'string' ? JSON.parse(mgRow.valor) : mgRow.valor;
-          _cache['_mornoGestao'] = _mgParsed;
-          try { localStorage.setItem('__morno_gestao_vg', JSON.stringify(_mgParsed)); } catch(_) {}
-        }
-      } catch(_e) { console.warn('[Morno] erro ao carregar:', _e); }
+      // Carrega Morno Gestão do banco
+      await _mornoGestaoCarregarBanco();
       _atualizarStatusSupa('🟢 Online', 'sync');
       // Renderiza imediatamente após ter os dados
       if (typeof renderVisaoGeral === 'function') renderVisaoGeral();
@@ -3015,48 +3009,64 @@
     if (aviso) aviso.style.display = 'none';
   }
   // Botão "💾 Salvar e atualizar" — re-renderiza tabela com os valores salvos
-  // ── Morno Gestão — armazenamento por agência/mês ──────────────────────
+  // ── Morno Gestão — usa app_storage igual ao resto do sistema ──────────
   const _MORNO_GESTAO_KEY = 'morno_gestao_vg';
+
   function _mornoGestaoCarregar() {
     try {
-      if (_cache['_mornoGestao'] && Object.keys(_cache['_mornoGestao']).length > 0) return _cache['_mornoGestao'];
-      // Fallback: tenta localStorage
-      var local = _mornoGestaoCarregarLocal ? _mornoGestaoCarregarLocal() : {};
-      if (Object.keys(local).length > 0) { _cache['_mornoGestao'] = local; return local; }
-      return {};
-    } catch(_) { return {}; }
+      var raw = localStorage.getItem(_MORNO_GESTAO_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch(_) {}
+    return {};
   }
+
   function _mornoGestaoSalvar(agency, mes, valor) {
-    if (!_cache['_mornoGestao']) _cache['_mornoGestao'] = {};
-    if (!_cache['_mornoGestao'][mes]) _cache['_mornoGestao'][mes] = {};
-    if (valor === '' || valor === null || isNaN(Number(valor))) {
-      delete _cache['_mornoGestao'][mes][agency];
+    var data = _mornoGestaoCarregar();
+    if (!data[mes]) data[mes] = {};
+    var v = parseFloat(String(valor).replace(/\./g,'').replace(',','.'));
+    if (isNaN(v) || valor === '' || valor === null) {
+      delete data[mes][agency];
     } else {
-      _cache['_mornoGestao'][mes][agency] = Number(valor);
+      data[mes][agency] = v;
     }
-    // Salva no localStorage como fallback
-    try { localStorage.setItem('__morno_gestao_vg', JSON.stringify(_cache['_mornoGestao'])); } catch(_) {}
-    // Persiste no Supabase
+    // Salva via localStorage (interceptado → vai para _cache)
+    localStorage.setItem(_MORNO_GESTAO_KEY, JSON.stringify(data));
+    // Sobe para o banco diretamente
     if (_supaClient) {
       _supaClient.from('app_storage').upsert({
         chave: _MORNO_GESTAO_KEY,
-        valor: JSON.stringify(_cache['_mornoGestao']),
+        valor: data,
         atualizado_em: new Date().toISOString()
       }, { onConflict: 'chave' }).select()
-      .then(function(res) { if (res.error) console.warn('[Morno] erro ao salvar:', res.error); });
+      .then(function(r){ if(r.error) console.warn('[Morno] erro salvar:', r.error); else showToast('💾 Morno salvo!'); });
     }
-    if (typeof renderVisaoGeral === 'function') renderVisaoGeral();
-    if (typeof renderConsolidadoAcumulado === 'function') renderConsolidadoAcumulado();
   }
   window._mornoGestaoSalvar = _mornoGestaoSalvar;
 
-  function _mornoGestaoCarregarLocal() {
-    // Tenta carregar do localStorage como fallback
+  function vgSalvarMornoGestao() {
+    // Lê todos os inputs de Morno Gestão visíveis e salva de uma vez
+    var inputs = document.querySelectorAll('input[data-mes][data-ag]');
+    inputs.forEach(function(el) {
+      var ag = el.getAttribute('data-ag');
+      var mes = el.getAttribute('data-mes');
+      if (ag && mes && el.value !== '') {
+        _mornoGestaoSalvar(ag, mes, el.value);
+      }
+    });
+    if (typeof renderConsolidadoAcumulado === 'function') renderConsolidadoAcumulado();
+    if (typeof renderVisaoGeral === 'function') renderVisaoGeral();
+  }
+  window.vgSalvarMornoGestao = vgSalvarMornoGestao;
+
+  async function _mornoGestaoCarregarBanco() {
+    if (!_supaClient) return;
     try {
-      var v = localStorage.getItem('__morno_gestao_vg');
-      if (v) return JSON.parse(v);
-    } catch(_) {}
-    return {};
+      var res = await _supaClient.from('app_storage').select('valor').eq('chave', _MORNO_GESTAO_KEY).maybeSingle();
+      if (res.data && res.data.valor) {
+        var v = typeof res.data.valor === 'string' ? JSON.parse(res.data.valor) : res.data.valor;
+        localStorage.setItem(_MORNO_GESTAO_KEY, JSON.stringify(v));
+      }
+    } catch(e) { console.warn('[Morno] erro carregar:', e); }
   }
 
   function vgSalvarEAtualizar() {
