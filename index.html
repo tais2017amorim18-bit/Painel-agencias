@@ -6537,47 +6537,18 @@
       return { lbl:'Q4', cor:'#b92d2d', bg:'#fde8e8' };
     };
 
-    // Agrega por agência somando todos os dias do mês
-    const store = JSON.parse(localStorage.getItem(STORE_KEY) || '[]')
-      .filter(r => r.date && r.date.startsWith(mes));
-
     let totVop = 0, totLiq = 0, totNetDia = 0, totNetProj = 0, totMeta = 0;
     let countTrofeu = 0;
     const linhas = AGENCIAS_CONS.map(ag => {
-      const dias = store.filter(r => r.agency === ag);
-      const vopAcum = dias.reduce((s,r) => s + ((Number(r.prodDesconto)||0)+(Number(r.antDemais)||0)+(Number(r.longoPrazo)||0)+(Number(r.arvDia)||0)), 0);
-      const liqAcum = dias.reduce((s,r) => s + (Number(r.liquidacaoTotal)||0), 0);
-      const netDiaAcum = dias.reduce((s,r) => s + (Number(r.netDia)||0), 0);
-
-      // Usa SALDOS INICIAIS como base — não overrides manuais
+      // Usa calcAcumuladoMes que já usa saldos iniciais corretamente
       const acum = (typeof calcAcumuladoMes === 'function') ? calcAcumuladoMes(ag, mes) : null;
-      const saldos = (function() {
-        try {
-          var s = JSON.parse(localStorage.getItem(SALDOS_KEY) || '{}');
-          var mes2 = mes;
-          if (s[mes2] && s[mes2][ag]) return s[mes2][ag];
-        } catch(_) {}
-        return null;
-      })();
-      // Meta VOP — vem dos saldos iniciais (preenchidos pelo usuário)
-      const meta = saldos ? (Number(saldos.metaVopInicial) || 0) : (acum ? acum.metaVop : 0);
-      // Net Fechamento usando saldos iniciais puros (sem overrides)
-      const netProj = (function() {
-        if (!saldos || !acum) return calcNetFechamentoAg(ag, mes);
-        var descIni   = Number(saldos.descInicial)   || 0;
-        var quenteIni = Number(saldos.quenteInicial) || 0;
-        var arvIni    = Number(saldos.arvInicial)    || 0;
-        var liqIni    = Number(saldos.liqInicial)    || 0;
-        var somaDesc  = acum.somaDesc  || 0;
-        var somaLp    = acum.somaLp    || 0;
-        var somaArv   = acum.somaArv   || 0;
-        var somaLiq   = acum.somaLiq   || 0;
-        var saldoDesc  = descIni  - somaDesc;
-        var saldoQuente= quenteIni - somaLp;
-        var saldoArv   = arvIni   - somaArv;
-        var saldoLiq   = liqIni   - somaLiq;
-        return saldoDesc + saldoQuente + saldoArv + saldoLiq + (acum.netAtual || 0);
-      })();
+      const vopAcum    = acum ? acum.somaVop     : 0;
+      const liqAcum    = acum ? acum.somaLiq     : 0;
+      const netDiaAcum = acum ? acum.netAtual    : 0;
+      // Net Fechamento calculado direto do acum (saldos iniciais - dedução)
+      const netProj = acum ? acum.netFechamento : 0;
+      const meta    = acum ? acum.metaVop        : 0;
+      const dias    = acum ? (_cache.lancamentos||[]).filter(r=>r.agency===ag&&r.date&&r.date.startsWith(mes)).length : 0;
       const pctMeta = meta > 0 ? (vopAcum / meta) * 100 : 0;
       const q = qInfo(vopAcum);
       const trofeu = netProj > 0 ? '🏆' : '';
