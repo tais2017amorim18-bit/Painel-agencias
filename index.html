@@ -6345,12 +6345,31 @@
             </div>
             <div style="font-size:8px;color:#aaa;margin-top:1px">Dia ${diaHoje}</div>
           </div>
-          <!-- Valores -->
+          <!-- Valores VOP -->
           <div style="flex:1;min-width:0">
             <div style="font-size:11px;font-weight:700;color:${color};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${fmtBRL(realVop)}</div>
             <div style="font-size:9px;color:#aaa">meta: ${fmtBRL(metaVop)}</div>
           </div>
         </div>
+        <!-- Net Atual e Net Projetado -->
+        ${(() => {
+          const _ac = calcAcumuladoMes(a.agency);
+          const _netAt  = _ac ? _ac.netAtual  : 0;
+          const _netProj = calcNetFechamentoAg(a.agency);
+          const _corNA  = _netAt  >= 0 ? '#0d6e56' : '#b92d2d';
+          const _corNP  = _netProj >= 0 ? '#0d6e56' : '#b92d2d';
+          return `<div style="display:flex;gap:6px;margin-top:6px;padding-top:6px;border-top:1px solid #f0f2f7">
+            <div style="flex:1;text-align:center">
+              <div style="font-size:8px;color:#aaa;margin-bottom:2px">Net Atual</div>
+              <div style="font-size:11px;font-weight:700;color:${_corNA}">${fmtBRL(_netAt)}</div>
+            </div>
+            <div style="width:1px;background:#f0f2f7"></div>
+            <div style="flex:1;text-align:center">
+              <div style="font-size:8px;color:#aaa;margin-bottom:2px">Net Projetado</div>
+              <div style="font-size:11px;font-weight:700;color:${_corNP}">${fmtBRL(_netProj)}</div>
+            </div>
+          </div>`;
+        })()}
       </div>`;
     }).join('');
   }
@@ -6530,10 +6549,35 @@
       const liqAcum = dias.reduce((s,r) => s + (Number(r.liquidacaoTotal)||0), 0);
       const netDiaAcum = dias.reduce((s,r) => s + (Number(r.netDia)||0), 0);
 
-      // Net Fechamento — usa função auxiliar com mesmos overrides da Visão Geral
+      // Usa SALDOS INICIAIS como base — não overrides manuais
       const acum = (typeof calcAcumuladoMes === 'function') ? calcAcumuladoMes(ag, mes) : null;
-      const netProj = calcNetFechamentoAg(ag, mes);
-      const meta = acum ? acum.metaVop : 0;
+      const saldos = (function() {
+        try {
+          var s = JSON.parse(localStorage.getItem(SALDOS_KEY) || '{}');
+          var mes2 = mes;
+          if (s[mes2] && s[mes2][ag]) return s[mes2][ag];
+        } catch(_) {}
+        return null;
+      })();
+      // Meta VOP — vem dos saldos iniciais (preenchidos pelo usuário)
+      const meta = saldos ? (Number(saldos.metaVopInicial) || 0) : (acum ? acum.metaVop : 0);
+      // Net Fechamento usando saldos iniciais puros (sem overrides)
+      const netProj = (function() {
+        if (!saldos || !acum) return calcNetFechamentoAg(ag, mes);
+        var descIni   = Number(saldos.descInicial)   || 0;
+        var quenteIni = Number(saldos.quenteInicial) || 0;
+        var arvIni    = Number(saldos.arvInicial)    || 0;
+        var liqIni    = Number(saldos.liqInicial)    || 0;
+        var somaDesc  = acum.somaDesc  || 0;
+        var somaLp    = acum.somaLp    || 0;
+        var somaArv   = acum.somaArv   || 0;
+        var somaLiq   = acum.somaLiq   || 0;
+        var saldoDesc  = descIni  - somaDesc;
+        var saldoQuente= quenteIni - somaLp;
+        var saldoArv   = arvIni   - somaArv;
+        var saldoLiq   = liqIni   - somaLiq;
+        return saldoDesc + saldoQuente + saldoArv + saldoLiq + (acum.netAtual || 0);
+      })();
       const pctMeta = meta > 0 ? (vopAcum / meta) * 100 : 0;
       const q = qInfo(vopAcum);
       const trofeu = netProj > 0 ? '🏆' : '';
